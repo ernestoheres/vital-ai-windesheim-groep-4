@@ -1,2 +1,4 @@
 /data/train_data.csv
 /.direnv/
+
+*.ipynb
