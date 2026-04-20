@@ -168,73 +168,91 @@ def _(df):
 
 @app.cell
 def _():
-    features = [
+    features_raw = [
         "Calcium",
         "Hgb",
         "EtCO2",
         "BUN"
     ]
-    return (features,)
+    return (features_raw,)
 
 
 @app.cell
-def _(df, df_test, features):
+def _(df, df_test, features_raw):
     from xgboost import XGBClassifier
     from sklearn.model_selection import train_test_split
     from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 
     target_col = "SepsisLabel"
+    patient_col = "Patient_ID"
 
     # Clean column names just in case
     df.columns = df.columns.str.strip()
     df_test.columns = df_test.columns.str.strip()
 
-    X = df.drop(columns=[target_col]).copy()
-    y = df[target_col].copy()
+    # optional: also strip feature names if needed
+    features = [f.strip() for f in features_raw]
 
-    # split labeled data
-    X_train, X_val, y_train, y_val = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+    # patient-level labels for stratification:
+    # 1 if patient ever becomes septic, else 0
+    patient_level = (
+        df.groupby(patient_col)[target_col]
+        .max()
+        .reset_index()
     )
 
+    train_ids, val_ids = train_test_split(
+        patient_level[patient_col],
+        test_size=0.2,
+        random_state=42,
+        stratify=patient_level[target_col]
+    )
+
+    # split full rows by patient
+    train_df = df[df[patient_col].isin(train_ids)].copy()
+    val_df = df[df[patient_col].isin(val_ids)].copy()
+
+    # keep only model features
+    X_train = train_df[features].copy()
+    y_train = train_df[target_col].copy()
+
+    X_val = val_df[features].copy()
+    y_val = val_df[target_col].copy()
+
     # fill missing values using only train stats
-    medians = X_train[features].median()
-    X_train[features] = X_train[features].fillna(medians)
-    X_val[features] = X_val[features].fillna(medians)
+    medians = X_train.median()
+    X_train = X_train.fillna(medians)
+    X_val = X_val.fillna(medians)
 
     # hospital test set: no labels
-    X_test = df_test.copy()
-    X_test[features] = X_test[features].fillna(medians)
+    X_test = df_test[features].copy()
+    X_test = X_test.fillna(medians)
 
     model = XGBClassifier(
         random_state=42,
-        scale_pos_weight=39,  # ~(1 - 0.025) / 0.025
+        scale_pos_weight=39,
         device="cuda",
-         max_depth=6,                  # 4-8, deeper = more complex patterns
-        min_child_weight=10,          # higher = more conservative, good for imbalance
-
-        # randomness / overfitting
-        subsample=0.8,                # row sampling per tree
-        colsample_bytree=0.8,         # feature sampling per tree
-
-        # learning
-        n_estimators=500,             # trees, use early stopping instead of guessing
-        learning_rate=0.05,           # lower = better generalisation, needs more trees
-
-        # regularisation
-        reg_alpha=0.1,                # L1 — drives weak features to zero
-        reg_lambda=1.0,               # L2 — default, usually fine
-        gamma=0.1,                    # min loss reduction to split — pruning
-
-        # performance
-        tree_method='hist',           # fast on large datasets, use 'gpu_hist' if you have GPU
-        eval_metric='aucpr',          # PR-AUC as your eval — matches your actual goal
-        early_stopping_rounds=50,     # stops when val score stops improving
+        max_depth=6,
+        min_child_weight=10,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        n_estimators=500,
+        learning_rate=0.05,
+        reg_alpha=0.1,
+        reg_lambda=1.0,
+        gamma=0.1,
+        tree_method="hist",
+        eval_metric="aucpr",
+        early_stopping_rounds=50,
         n_jobs=-1
     )
 
-    model.fit(X_train, y_train, eval_set=[(X_val, y_val)],
-        verbose=50)
+    model.fit(
+        X_train,
+        y_train,
+        eval_set=[(X_val, y_val)],
+        verbose=50
+    )
 
     # local validation
     y_val_pred = model.predict(X_val)
@@ -245,7 +263,16 @@ def _(df, df_test, features):
 
     # final hospital predictions
     test_preds = model.predict(X_test)
-    return X_val, model, test_preds, y_val, y_val_pred
+    return (
+        X_val,
+        model,
+        patient_col,
+        target_col,
+        test_preds,
+        val_df,
+        y_val,
+        y_val_pred,
+    )
 
 
 @app.cell
@@ -321,7 +348,7 @@ def _(val_labels_path, val_predictions_path):
 
 
 @app.cell
-def _(X_val, df_test, pd, test_preds, y_val, y_val_pred):
+def _(df_test, patient_col, target_col, test_preds, val_df, y_val_pred):
     # Label the unlabeled test set with model predictions
     df_test_labeled = df_test.copy()
     df_test_labeled["SepsisLabel"] = test_preds.astype(int)
@@ -336,15 +363,15 @@ def _(X_val, df_test, pd, test_preds, y_val, y_val_pred):
     val_labels_path = "data/validation_labels.csv"
     val_predictions_path = "data/validation_predictions.csv"
 
-    validation_df = pd.DataFrame({
-        "Patient_ID": X_val["Patient_ID"].astype(int).to_numpy(),
-        "SepsisLabel": y_val.astype(int).to_numpy(),
-        "PredictedSepsisLabel": y_val_pred.astype(int),
-    })
+    validation_df = val_df[[patient_col, target_col]].copy()
+    validation_df["PredictedSepsisLabel"] = y_val_pred.astype(int)
 
-    validation_df[["Patient_ID", "SepsisLabel"]].to_csv(val_labels_path, index=False)
-    validation_df[["Patient_ID", "PredictedSepsisLabel"]].rename(
-        columns={"PredictedSepsisLabel": "SepsisLabel"}
+    validation_df[[patient_col, target_col]].rename(
+        columns={patient_col: "Patient_ID", target_col: "SepsisLabel"}
+    ).to_csv(val_labels_path, index=False)
+
+    validation_df[[patient_col, "PredictedSepsisLabel"]].rename(
+        columns={patient_col: "Patient_ID", "PredictedSepsisLabel": "SepsisLabel"}
     ).to_csv(val_predictions_path, index=False)
 
     print(f"Saved labeled test set to: {testset_labeled_path}")
