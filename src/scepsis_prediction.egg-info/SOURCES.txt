@@ -1,0 +1,8 @@
+README.md
+pyproject.toml
+src/scepsis_prediction/__init__.py
+src/scepsis_prediction/evaluation.py
+src/scepsis_prediction.egg-info/PKG-INFO
+src/scepsis_prediction.egg-info/SOURCES.txt
+src/scepsis_prediction.egg-info/dependency_links.txt
+src/scepsis_prediction.egg-info/top_level.txt
