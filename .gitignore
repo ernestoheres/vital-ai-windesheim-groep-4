@@ -2,4 +2,4 @@
 /.direnv/
 **/__Pycache__/
 *.ipynb
-/agents/
+/.agents/
