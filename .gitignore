@@ -1,4 +1,4 @@
 /data/train_data.csv
 /.direnv/
-
+**/__Pycache__/
 *.ipynb

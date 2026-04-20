@@ -58,7 +58,7 @@ def _(df):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
- 
+
     """)
     return
 
@@ -209,9 +209,32 @@ def _(df, df_test, features):
     model = XGBClassifier(
         random_state=42,
         scale_pos_weight=39,  # ~(1 - 0.025) / 0.025
+        device="cuda",
+         max_depth=6,                  # 4-8, deeper = more complex patterns
+        min_child_weight=10,          # higher = more conservative, good for imbalance
+
+        # randomness / overfitting
+        subsample=0.8,                # row sampling per tree
+        colsample_bytree=0.8,         # feature sampling per tree
+
+        # learning
+        n_estimators=500,             # trees, use early stopping instead of guessing
+        learning_rate=0.05,           # lower = better generalisation, needs more trees
+
+        # regularisation
+        reg_alpha=0.1,                # L1 — drives weak features to zero
+        reg_lambda=1.0,               # L2 — default, usually fine
+        gamma=0.1,                    # min loss reduction to split — pruning
+
+        # performance
+        tree_method='hist',           # fast on large datasets, use 'gpu_hist' if you have GPU
+        eval_metric='aucpr',          # PR-AUC as your eval — matches your actual goal
+        early_stopping_rounds=50,     # stops when val score stops improving
+        n_jobs=-1
     )
 
-    model.fit(X_train, y_train)
+    model.fit(X_train, y_train, eval_set=[(X_val, y_val)],
+        verbose=50)
 
     # local validation
     y_val_pred = model.predict(X_val)
@@ -222,7 +245,7 @@ def _(df, df_test, features):
 
     # final hospital predictions
     test_preds = model.predict(X_test)
-    return X_val, model, y_val, y_val_pred
+    return X_val, model, test_preds, y_val, y_val_pred
 
 
 @app.cell
@@ -282,6 +305,53 @@ def _(X_val, model, y_val):
         print("y_proba samples:", len(y_proba))
     _()
     return
+
+
+@app.cell
+def _(val_labels_path, val_predictions_path):
+    from scepsis_prediction import evaluation
+
+    utility = evaluation.evaluate_sepsis_score(
+        label_csv=val_labels_path,
+        prediction_csv=val_predictions_path,
+    )
+
+    print(f"Validation utility score: {utility:.6f}")
+    return
+
+
+@app.cell
+def _(X_val, df_test, pd, test_preds, y_val, y_val_pred):
+    # Label the unlabeled test set with model predictions
+    df_test_labeled = df_test.copy()
+    df_test_labeled["SepsisLabel"] = test_preds.astype(int)
+
+    testset_labeled_path = "data/testset_labeled_predictions.csv"
+    predictions_path = "predictions.csv"
+
+    df_test_labeled.to_csv(testset_labeled_path, index=False)
+    df_test_labeled[["Patient_ID", "SepsisLabel"]].to_csv(predictions_path, index=False)
+
+    # Build validation label/prediction CSVs so the utility can be computed
+    val_labels_path = "data/validation_labels.csv"
+    val_predictions_path = "data/validation_predictions.csv"
+
+    validation_df = pd.DataFrame({
+        "Patient_ID": X_val["Patient_ID"].astype(int).to_numpy(),
+        "SepsisLabel": y_val.astype(int).to_numpy(),
+        "PredictedSepsisLabel": y_val_pred.astype(int),
+    })
+
+    validation_df[["Patient_ID", "SepsisLabel"]].to_csv(val_labels_path, index=False)
+    validation_df[["Patient_ID", "PredictedSepsisLabel"]].rename(
+        columns={"PredictedSepsisLabel": "SepsisLabel"}
+    ).to_csv(val_predictions_path, index=False)
+
+    print(f"Saved labeled test set to: {testset_labeled_path}")
+    print(f"Saved test predictions to: {predictions_path}")
+    print(f"Saved validation labels to: {val_labels_path}")
+    print(f"Saved validation predictions to: {val_predictions_path}")
+    return val_labels_path, val_predictions_path
 
 
 @app.cell
