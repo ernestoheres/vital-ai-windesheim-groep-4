@@ -9,7 +9,7 @@ class SofaCalculator:
     def __init__(self, df: pd.DataFrame):
         self.df = df.copy()
         self.redundant_qsofa_colls = ['qsofa_resp', 'qsofa_sbp']
-        self.redundant_sofa_colls = ['sofa_resp', 'sofa_coag', 'sofa_liver', 'sofa_cv', 'sofa_renal']
+        self.redundant_sofa_colls = ['sofa_resp', 'sofa_coag', 'sofa_liver', 'sofa_cv', 'sofa_renal', 'SF_ratio']
 
     def calculate_qsofa(self, returnColumns: bool = False) -> pd.DataFrame:
         self.df = self.__calculate_qsofa(self.df.copy())
