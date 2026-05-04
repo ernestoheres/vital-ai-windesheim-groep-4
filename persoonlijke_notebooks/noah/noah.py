@@ -28,13 +28,18 @@
 # Om consistent met deze beperkingen om te gaan, is de klasse `SofaCalculator` ontwikkeld. Deze klasse bevat alle logica voor het berekenen van de qSOFA- en SOFA-scores op basis van de beschikbare data. Door deze klasse te importeren in de notebooks, kunnen alle groepsleden dezelfde berekeningsmethode hanteren en wordt inconsistentie in de analyses voorkomen.
 
 # %%
+import sys
+import os
+
+sys.path.append(os.path.abspath("../../src"))
+
+# %%
 import pandas as pd
 import seaborn as sns
 import numpy as np
-import os
 import matplotlib.pyplot as plt
 
-df = pd.read_csv('../data/test_data.csv', sep=',')
+df = pd.read_csv('../../data/test_data.csv', sep=',')
 
 # %% [markdown]
 # De dataset bevat een groot aantal variabelen, namelijk 43 kolommen. Het merendeel hiervan bestaat uit medische metingen die bij patiënten zijn uitgevoerd.
@@ -151,7 +156,7 @@ df = df.fillna(0)
 # De enige aanvullende kolommen die nodig zijn, worden berekend en toegevoegd aan de dataset door de `SofaCalculator`. De twee functieaanroepen van de `SofaCalculator` gebruiken vervolgens de gedeeltelijke SOFA-scores om te bepalen of een patiënt wel of geen sepsis heeft.
 
 # %%
-from Modules.SofaCalculator import SofaCalculator
+from scepsis_prediction.SofaCalculator import SofaCalculator
 
 sofa_calc = SofaCalculator(df)
 
@@ -239,8 +244,6 @@ f_model.view(scale=2)
 
 # %% [markdown]
 # ## Random forest
-
-# %% [markdown]
 # Net als bij het vorige model wordt ook dit model getraind om het sepsislabel te herkennen. Dit gebeurt op een vergelijkbare manier als bij de decision tree.
 
 # %%
@@ -375,32 +378,123 @@ df = df.dropna(subset=['Sepsis_Future'])
 
 # %% [markdown]
 # ### Format Data
+# In de vorige cyclus waren de modellen relatief eenvoudig opgezet. Daarbij werd direct gekeken naar de `SOFA`- en `qSOFA`-scores om te bepalen of een patiënt sepsis had. Omdat deze scores zelf al gebaseerd zijn op klinische criteria voor sepsis, leidde dit tot ogenschijnlijk perfecte (100%) voorspellingen.
+# 
+# In deze cyclus worden deze samengestelde scores bewust weggelaten. In plaats daarvan wordt uitsluitend gekeken naar de onderliggende medische parameters die samen de SOFA- en qSOFA-scores vormen. Op basis van deze ruwe gegevens wordt vervolgens bepaald of een patiënt sepsis heeft, met als doel een robuuster en realistischer voorspellingsmodel te ontwikkelen. Daarnaast ligt de focus ditmaal niet alleen op het vaststellen of een patiënt op dit moment sepsis heeft, maar juist op het voorspellen of een patiënt dit in de toekomst zal ontwikkelen.
 
 # %%
-features = ['heart_rate', 'resp_rate', 'blood_pressure']
+qsofa_features = [col for col in df.columns if 'qsofa' in col.lower()]
 
-X = df[features]
-y = df['sepsis_future']
+sofa_features = [
+    col for col in df.columns
+    if 'sofa' in col.lower() and col not in qsofa_features
+] + ['SF_ratio']
 
-patients = df['patient_id'].unique()
+unit_features = [col for col in df.columns if 'unit' in col.lower()]
+
+drop_cols = [
+    'Patient_ID',
+    'SepsisLabel', 
+    'Sepsis_Future',
+    *qsofa_features, 
+    *sofa_features, 
+    *unit_features
+]
+
+# %% [markdown]
+# In de vorige cyclus werd het opsplitsen van de data niet correct uitgevoerd. De dataset werd willekeurig verdeeld, waardoor dezelfde patiënten zowel in de `train`- als in de `test`-set terechtkwamen, met hun verschillende bezoeken verspreid over beide sets. Dit is onlogisch en leidt bovendien tot een vertekende en onevenwichtige verdeling van de data.
+# 
+# In deze cyclus wordt dit probleem aangepakt door te splitsen op basis van unieke `Patient_ID`s. Hierdoor blijven alle gegevens van een individuele patiënt binnen één dataset (train of test), wat zorgt voor een realistischer en betrouwbaarder evaluatie van het model.
 
 # %%
+patients = df['Patient_ID'].unique()
+
 train_patients, test_patients = train_test_split(
     patients, test_size=0.2, random_state=42
 )
 
+# %% [markdown]
+# Hieronder worden de uiteindelijke `train`- en `test`-sets samengesteld. De gegevens worden hierbij gefilterd op basis van de unieke `Patient_ID`s, zodat elke dataset uitsluitend uit verschillende patiënten bestaat en er geen overlap tussen beide sets optreedt.
+# 
+# Daarnaast worden in deze stap ook de `X` en `y` gescheiden voor zowel de train- als testset.
+
 # %%
-train_df = df[df['patient_id'].isin(train_patients)]
-test_df = df[df['patient_id'].isin(test_patients)]
+train_df = df[df['Patient_ID'].isin(train_patients)]
+test_df = df[df['Patient_ID'].isin(test_patients)]
 
-X_train = train_df[features]
-y_train = train_df['sepsis_future']
+X_train = train_df.drop(columns=drop_cols)
+y_train = train_df['Sepsis_Future'].astype(int)
 
-X_test = test_df[features]
-y_test = test_df['sepsis_future']
+X_test = test_df.drop(columns=drop_cols)
+y_test = test_df['Sepsis_Future'].astype(int)
 
 # %% [markdown]
 # ## Modeling
+# 
+# ### Decision Tree
+
+# %%
+print(X.shape)
+print(y.shape)
+
+# %%
+model = DecisionTreeClassifier(max_depth=3, class_weight='balanced')
+model.fit(X_train, y_train)
+
+# %%
+y_pred = model.predict(X_test)
+
+print(classification_report(y_test, y_pred))
+print(confusion_matrix(y_test, y_pred))
+
+# %%
+dt2_model = dtreeviz.model(
+    model,
+    X_train,
+    y_train,
+    feature_names=X_train.columns,
+    target_name='Sepsis',
+    class_names=["No Sepsis", "Sepsis"]
+)
+
+dt2_model.view(scale=2)
+
+# %% [markdown]
+# ### Random Forest
+
+# %%
+rf2_model = RandomForestClassifier(
+    n_estimators=100,        
+    max_depth=10,           
+    class_weight='balanced', 
+    random_state=42,
+    n_jobs=-1                
+)
+
+rf2_model.fit(X_train, y_train)
+
+# %%
+y_pred = rf2_model.predict(X_test)
+
+print(classification_report(y_test, y_pred))
+print(confusion_matrix(y_test, y_pred))
+
+# %%
+rf2_tree = rf2_model.estimators_[0]
+
+rf2_tree_model = dtreeviz.model(
+    rf2_tree,
+    X_train,
+    y_train,
+    feature_names=X_train.columns,
+    target_name='SepsisLabel',
+    class_names=["No Sepsis", "Sepsis"]
+)
+
+rf2_tree_model.view()
+
+# %% [markdown]
+# ## Reflectie
 
 # %% [markdown]
 # # Cycle III
