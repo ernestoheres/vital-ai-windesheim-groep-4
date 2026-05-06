@@ -199,7 +199,7 @@ from sklearn.model_selection import train_test_split
 X = df.drop(columns=['SepsisLabel', 'Unit1', 'Unit2'])
 y = df['SepsisLabel'].astype(int)
 
-x_train, x_test, y_train, y_test = train_test_split(
+X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
 
@@ -216,13 +216,13 @@ from sklearn.metrics import classification_report, confusion_matrix
 import dtreeviz
 
 model = DecisionTreeClassifier(max_depth=3, class_weight='balanced')
-model.fit(x_train, y_train)
+model.fit(X_train, y_train)
 
 # %% [markdown]
 # De prestaties van het model zijn uitzonderlijk goed, maar vereisen nadere controle om te bevestigen of dit correct is.
 
 # %%
-y_pred = model.predict(x_test)
+y_pred = model.predict(X_test)
 
 print(classification_report(y_test, y_pred))
 print(confusion_matrix(y_test, y_pred))
@@ -231,16 +231,16 @@ print(confusion_matrix(y_test, y_pred))
 # De visualisatie laat zien hoeveel patiënten in de trainingsdataset op basis van de SOFA-scores als sepsis worden geclassificeerd. Daarnaast zijn er enkele andere variabelen opgenomen, maar deze lijken weinig tot geen invloed te hebben op deze classificatie.
 
 # %%
-f_model = dtreeviz.model(
+dt1_model = dtreeviz.model(
     model,
-    x_train,
+    X_train,
     y_train,
-    feature_names=x_train.columns,
+    feature_names=X_train.columns,
     target_name='Sepsis',
     class_names=["No Sepsis", "Sepsis"]
 )
 
-f_model.view(scale=2)
+dt1_model.view(scale=2)
 
 # %% [markdown]
 # ## Random forest
@@ -249,7 +249,7 @@ f_model.view(scale=2)
 # %%
 from sklearn.ensemble import RandomForestClassifier
 
-rf_model = RandomForestClassifier(
+rf1_model = RandomForestClassifier(
     n_estimators=100,        
     max_depth=10,           
     class_weight='balanced', 
@@ -257,13 +257,13 @@ rf_model = RandomForestClassifier(
     n_jobs=-1                
 )
 
-rf_model.fit(x_train, y_train)
+rf1_model.fit(X_train, y_train)
 
 # %% [markdown]
 # Net zoals bij het voirge lijkt dit model perfect. Dit is heel onwaarschijnlijk en moet dus ook nader na gekekn worden of dit wel correct is.
 
 # %%
-y_pred = rf_model.predict(x_test)
+y_pred = rf1_model.predict(X_test)
 
 print(classification_report(y_test, y_pred))
 print(confusion_matrix(y_test, y_pred))
@@ -272,18 +272,18 @@ print(confusion_matrix(y_test, y_pred))
 # Omdat dit model, net als een decision tree, gebruikmaakt van boomstructuren, kijkt het niet naar één enkele boom maar naar meerdere bomen om te bepalen of iemand wel of niet aan het sepsislabel voldoet. Door deze combinatie van meerdere bomen kan het model verschillende patronen meenemen in de beslissing. Daarom lijkt dit model geschikter dan een enkele decision tree, omdat het op basis van meer informatie en perspectieven tot een eindbeslissing komt.
 
 # %%
-rf_tree = rf_model.estimators_[0]
+rf1_tree = rf1_model.estimators_[0]
 
-rf_tree_model = dtreeviz.model(
-    rf_tree,
-    x_train,
+rf1_tree_model = dtreeviz.model(
+    rf1_tree,
+    X_train,
     y_train,
-    feature_names=x_train.columns,
+    feature_names=X_train.columns,
     target_name='SepsisLabel',
     class_names=["No Sepsis", "Sepsis"]
 )
 
-rf_tree_model.view()
+rf1_tree_model.view()
 
 # %% [markdown]
 # ### Reflectie
@@ -393,7 +393,6 @@ sofa_features = [
 unit_features = [col for col in df.columns if 'unit' in col.lower()]
 
 drop_cols = [
-    'Patient_ID',
     'SepsisLabel', 
     'Sepsis_Future',
     *qsofa_features, 
@@ -405,47 +404,95 @@ drop_cols = [
 # In de vorige cyclus werd het opsplitsen van de data niet correct uitgevoerd. De dataset werd willekeurig verdeeld, waardoor dezelfde patiënten zowel in de `train`- als in de `test`-set terechtkwamen, met hun verschillende bezoeken verspreid over beide sets. Dit is onlogisch en leidt bovendien tot een vertekende en onevenwichtige verdeling van de data.
 # 
 # In deze cyclus wordt dit probleem aangepakt door te splitsen op basis van unieke `Patient_ID`s. Hierdoor blijven alle gegevens van een individuele patiënt binnen één dataset (train of test), wat zorgt voor een realistischer en betrouwbaarder evaluatie van het model.
+# 
+# De helperfunctie `train_test_split_by_patient` is ontwikkeld om de dataset op een consistente en correcte manier te splitsen. Het doel van deze functie is om herbruikbaarheid te waarborgen, zodat bij toekomstige iteraties of aanpassingen aan de data dezelfde logica eenvoudig opnieuw kan worden toegepast. Hierdoor wordt voorkomen dat identieke bewerkingen telkens opnieuw moeten worden uitgevoerd en dat dezelfde code herhaaldelijk herschreven moet worden.
 
 # %%
-patients = df['Patient_ID'].unique()
+def train_test_split_by_patient(
+    data: pd.DataFrame, 
+    group_col: str = 'Patient_ID', 
+    test_size=0.2, 
+    random_state=42
+):
+    df = data.copy()
+    patients = df[group_col].unique()
 
-train_patients, test_patients = train_test_split(
-    patients, test_size=0.2, random_state=42
-)
+    train_patients, test_patients = train_test_split(
+        patients, test_size=test_size, random_state=random_state
+    )
+
+    return train_patients, test_patients
 
 # %% [markdown]
-# Hieronder worden de uiteindelijke `train`- en `test`-sets samengesteld. De gegevens worden hierbij gefilterd op basis van de unieke `Patient_ID`s, zodat elke dataset uitsluitend uit verschillende patiënten bestaat en er geen overlap tussen beide sets optreedt.
-# 
-# Daarnaast worden in deze stap ook de `X` en `y` gescheiden voor zowel de train- als testset.
+# Hieronder word het splitsen van de data daadwerkelijk gedaan op basis van de helperfunctie.
 
 # %%
-train_df = df[df['Patient_ID'].isin(train_patients)]
-test_df = df[df['Patient_ID'].isin(test_patients)]
+train_patients, test_patients = train_test_split_by_patient(df)
 
-X_train = train_df.drop(columns=drop_cols)
-y_train = train_df['Sepsis_Future'].astype(int)
+# %% [markdown]
+# Hieronder worden de uiteindelijke `train`- en `test`-sets samengesteld. De gegevens worden gefilterd op basis van unieke `Patient_ID`s, zodat beide datasets uitsluitend uit verschillende patiënten bestaan en er geen overlap optreedt. Dit proces wordt uitgevoerd met behulp van de helperfunctie `get_train_test_data_by_patient`, waardoor dezelfde bewerkingen eenvoudig herhaald kunnen worden door het hele notebook.
+# 
+# Daarnaast worden in deze stap de invoervariabelen (`X`) en de doelvariabele (`y`) gescheiden voor zowel de train- als de testset.
 
-X_test = test_df.drop(columns=drop_cols)
-y_test = test_df['Sepsis_Future'].astype(int)
+# %%
+TrainTestSplit = tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]
+
+def get_train_test_data_by_patient(
+    data: pd.DataFrame,
+    train_patients: pd.DataFrame, 
+    test_patients: pd.DataFrame,
+    y_target: str = 'Sepsis_Future',
+    group_col: str = 'Patient_ID'
+) -> TrainTestSplit:
+    df = data.copy()
+    train = train_patients.copy()
+    test = test_patients.copy()
+
+    train_df = df[df[group_col].isin(train)]
+    test_df = df[df[group_col].isin(test)]
+
+    X_train = train_df.drop(columns=drop_cols)
+    y_train = train_df[y_target].astype(int)
+
+    X_test = test_df.drop(columns=drop_cols)
+    y_test = test_df[y_target].astype(int)
+
+    return X_train, y_train, X_test, y_test
+
+
+# %% [markdown]
+# Hieronder worden de `train`- en `test`-sets opgehaald op basis van de huidige dataset. Voor deze voorspelling is `Patient_ID` overbodig en word deze daarom nog verwijderd.
+
+# %%
+X_train, y_train, X_test, y_test = get_train_test_data_by_patient(df, train_patients, test_patients)
+
+X_train = X_train.drop(columns=['Patient_ID'])
+X_test = X_test.drop(columns=['Patient_ID'])
 
 # %% [markdown]
 # ## Modeling
+# In dit hoofdstuk worden dezelfde modellen op identieke wijze opgebouwd als in de vorige cyclus. Het verschil is dat er ditmaal gebruik wordt gemaakt van een beter voorbereide dataset. In hoeverre dit daadwerkelijk tot betere prestaties leidt, zal blijken uit de modelresultaten, al is de verwachting dat de verbeterde datakwaliteit hier een positieve bijdrage aan levert.
 # 
 # ### Decision Tree
-
-# %%
-print(X.shape)
-print(y.shape)
+# Hieronder wordt de opbouw van de nieuwe decision tree weergegeven. Hierbij ligt de focus met name op de `classification report` en de `confusion matrix`, om te beoordelen of het model daadwerkelijk is verbeterd. Het model wordt getraind en geëvalueerd met de eerder samengestelde `train`- en `test`-datasets.
 
 # %%
 model = DecisionTreeClassifier(max_depth=3, class_weight='balanced')
 model.fit(X_train, y_train)
+
+# %% [markdown]
+# Uit de resultaten blijkt dat het model minder goed presteert dan in de vorige cyclus. Met name de lage precision voor klasse 1 en de relatief hoge hoeveelheid fout-positieve voorspellingen laten zien dat het model moeite heeft om sepsis nauwkeurig te identificeren. Tegelijkertijd is de recall voor klasse 1 wel hoog, wat betekent dat een groot deel van de daadwerkelijke gevallen wordt herkend, maar ten koste van veel onterechte voorspellingen.
+# 
+# Hoewel de prestaties op het eerste gezicht slechter lijken, is dit juist een positieve ontwikkeling. In de vorige cyclus was er sprake van datalekken en een onjuiste datasplitsing, waardoor de resultaten te optimistisch waren. In de huidige aanpak is de data correct verdeeld op basis van unieke patiënten, wat zorgt voor een realistischer en betrouwbaarder beeld van de modelprestaties.
 
 # %%
 y_pred = model.predict(X_test)
 
 print(classification_report(y_test, y_pred))
 print(confusion_matrix(y_test, y_pred))
+
+# %% [markdown]
+# Kijkend naar het model valt op dat het slechts een beperkt aantal kenmerken gebruikt om te bepalen of iemand sepsis heeft of niet. Hierdoor lijkt het model onvoldoende complex en daarmee minder geschikt voor deze vraagstelling. Tegelijkertijd is het wel positief om te zien dat, ondanks deze beperkingen, er sprake is van een verbetering ten opzichte van de vorige aanpak.
 
 # %%
 dt2_model = dtreeviz.model(
@@ -461,6 +508,7 @@ dt2_model.view(scale=2)
 
 # %% [markdown]
 # ### Random Forest
+# Hetzelfde geldt hier. Het model wordt op dezelfde manier opgebouwd als het vorige, maar ditmaal met gebruik van de nieuwe `train`- en `test`datasets.
 
 # %%
 rf2_model = RandomForestClassifier(
@@ -473,28 +521,49 @@ rf2_model = RandomForestClassifier(
 
 rf2_model.fit(X_train, y_train)
 
+# %% [markdown]
+# Uit de resultaten van het random forest blijkt dat het model beter presteert dan de decision tree. De accuracy ligt hoger en ook de verdeling in de confusion matrix laat zien dat er minder fout-positieve voorspellingen worden gedaan. Dit wijst erop dat het model beter in staat is om onderscheid te maken tussen de klassen.
+# 
+# Tegelijkertijd blijft de precision voor klasse 1 laag, wat betekent dat een groot deel van de voorspelde sepsisgevallen onterecht is. De recall voor klasse 1 is daarentegen nog steeds redelijk hoog, waardoor het model wel een groot deel van de daadwerkelijke gevallen weet te identificeren.
+# 
+# Net als bij het vorige model geldt dat de prestaties realistischer zijn dan in de eerdere cyclus. Door de verbeterde datasplitsing op basis van unieke patiënten geeft dit model een betrouwbaarder beeld van de werkelijke prestaties, ook al zijn deze minder optimaal dan voorheen.
+
 # %%
 y_pred = rf2_model.predict(X_test)
 
 print(classification_report(y_test, y_pred))
 print(confusion_matrix(y_test, y_pred))
 
+# %% [markdown]
+# Uit deze visualisatie blijkt dat het model rekening houdt met een veel meer variabelen uit de dataset. In plaats van slechts enkele kenmerken, worden meerdere factoren meegenomen die gezamenlijk bijdragen aan de classificatie of iemand wel of geen sepsis heeft.
+# 
+# Daarnaast valt op dat ook variabelen zoals `hour` worden meegenomen. Dit geeft waardevol inzicht in het tijdsaspect van de metingen en laat zien op welke momenten bepaalde waarden een rol spelen bij het voorspellen van sepsis. Hierdoor wordt er als het ware per uur gekeken naar de kans dat een patiënt de aandoening heeft of zal ontwikkelen.
+
 # %%
-rf2_tree = rf2_model.estimators_[0]
+# rf2_tree = rf2_model.estimators_[0]
 
-rf2_tree_model = dtreeviz.model(
-    rf2_tree,
-    X_train,
-    y_train,
-    feature_names=X_train.columns,
-    target_name='SepsisLabel',
-    class_names=["No Sepsis", "Sepsis"]
-)
+# rf2_tree_model = dtreeviz.model(
+#     rf2_tree,
+#     X_train.drop(columns=['Patient_ID']),
+#     y_train,
+#     feature_names=X_train.columns,
+#     target_name='SepsisLabel',
+#     class_names=["No Sepsis", "Sepsis"]
+# )
 
-rf2_tree_model.view()
+# rf2_tree_model.view(scale=2)
 
 # %% [markdown]
 # ## Reflectie
+# Uit deze cyclus blijkt dat de modellen een duidelijk realistischer beeld geven van de prestaties dan in de vorige cyclus. Hoewel de resultaten in theorie slechter lijken, is dit juist een positieve ontwikkeling. In de eerdere cyclus was er sprake van overfitting en datalekken door een onjuiste datasplitsing, waardoor de prestaties te optimistisch werden weergegeven. In de huidige aanpak, waarbij is gesplitst op basis van unieke patiënten, zijn de resultaten betrouwbaarder en beter representatief voor de praktijk.
+# 
+# De decision tree laat zien dat het model moeite heeft om sepsis nauwkeurig te classificeren. Met name de lage precision voor klasse 1 en het hoge aantal fout-positieve voorspellingen vallen op, ondanks een relatief hoge recall. Daarnaast gebruikt het model slechts een beperkt aantal kenmerken, wat erop wijst dat het te eenvoudig is voor dit complexe vraagstuk. Om die reden wordt dit model niet verder meegenomen in volgende cycli.
+# 
+# Het random forest presteert aantoonbaar beter dan de decision tree. De accuracy ligt hoger en de verdeling in de confusion matrix is evenwichtiger, met minder fout-positieve voorspellingen. Dit duidt erop dat het model beter onderscheid kan maken tussen de klassen. Tegelijkertijd blijft de precision voor klasse 1 laag, wat aangeeft dat er nog steeds veel onterechte positieve voorspellingen worden gedaan. De recall blijft daarentegen redelijk hoog, waardoor het model wel een groot deel van de daadwerkelijke sepsisgevallen weet te identificeren.
+# 
+# Uit de bijbehorende visualisatie blijkt bovendien dat het random forest gebruikmaakt van een meer variabelen. In tegenstelling tot de decision tree worden meerdere kenmerken meegenomen in de besluitvorming, waaronder ook tijdsgerelateerde variabelen zoals `hour`. Dit biedt extra inzicht in het moment waarop bepaalde metingen bijdragen aan de voorspelling en maakt het model beter geschikt voor dit type probleem.
+# 
+# Voor de volgende cyclus ligt de focus op het verkennen van alternatieve modellen, zoals een `AMIRA`- of `SAMIRA`-model. In een latere cyclus kan vervolgens worden gekeken naar het verfijnen van deze modellen en het vergelijken van de best presterende variant met het huidige random forest.
 
 # %% [markdown]
 # # Cycle III
@@ -505,15 +574,64 @@ rf2_tree_model.view()
 # %% [markdown]
 # ## Data preperation
 # ### Clean Data
+# Deze stap word in deze cycle overgeslagen omdat er verder word gewerkt met de data van de vorige cyclus. 
 
 # %% [markdown]
 # ### Construct Data
+# Hieronder staat een kleine helpermethode die de duur van een bezoek berekent, oftewel het tijdsverschil (tijdsdeltа) van een opname. In de dataset begint de tijdsregistratie van een bezoek bij 0. Daarom wordt hier de maximale waarde genomen en met 1 verhoogd. Dit geeft de totale duur weer dat een patiënt in het ziekenhuis heeft verbleven. Door deze berekening toe te passen, wordt het eenvoudiger om de `ARIMA`- en `SARIMA`-model verder uit te werken.
+# 
+# Deze functie geeft een `Series` terug oftewel een kolom. Dit omdat binnen de functie gefilterd word op bepaalde data. Daarom is het makkelijker om deze terug tegeven inplaats van een geheel `DataFrame`.
+
+# %%
+def calculateVisitTime(data: pd.DataFrame) -> pd.Series:
+    df = data.copy()
+    df = df[['Patient_ID', 'Hour']].sort_values(['Patient_ID', 'Hour'])
+
+    visit_duration = (
+        df.groupby(['Patient_ID'])['Hour']
+        .max()
+        .add(1)
+    )
+
+    df['visit_duration'] = df.set_index(['Patient_ID']).index.map(visit_duration)
+
+    return df['visit_duration']
+
+
+# %% [markdown]
+# Omdat in de functie `get_train_test_data_by_patient` de `Patient_ID` wordt verwijderd, moeten de basisvoorbereidingen opnieuw worden uitgevoerd. Dit is noodzakelijk omdat `calculateVisitTime` wordt berekend op basis van zowel de `Patient_ID` als de `Hour`. `Patient_ID` is namelijk in de vorige cycle uit de `train`- en `test`-data verwijderd.
+
+# %%
+train_patients, test_patients = train_test_split_by_patient(df)
+
+X_train, y_train, X_test, y_test = get_train_test_data_by_patient(df, train_patients, test_patients)
+
+X_train['visit_duration'] = calculateVisitTime(X_train)
+X_test['visit_duration'] = calculateVisitTime(X_test)
+
+X_train = X_train.drop(columns=['Patient_ID'])
+X_test = X_test.drop(columns=['Patient_ID'])
+
 
 # %% [markdown]
 # ### Format Data
+# Deze stap word in deze cycle overgeslagen omdat er verder word gewerkt met de data van de vorige cyclus. 
 
 # %% [markdown]
 # ## Modeling
+# 
+# ### AMIRA
+
+# %%
+from statsmodels.tsa.stattools import adfuller
+from statsmodels.graphics.tsaplots import plot_pacf, plot_acf
+from statsmodels.tsa.arima.model import ARIMA
+
+# %% [markdown]
+# ### SAMIRA
+
+# %%
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 # %% [markdown]
 # 
