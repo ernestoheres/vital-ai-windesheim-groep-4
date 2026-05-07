@@ -39,7 +39,7 @@ import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
 
-df = pd.read_csv('../../data/test_data.csv', sep=',')
+df = pd.read_csv('../../data/train_data.csv', sep=',')
 
 # %% [markdown]
 # De dataset bevat een groot aantal variabelen, namelijk 43 kolommen. Het merendeel hiervan bestaat uit medische metingen die bij patiënten zijn uitgevoerd.
@@ -69,11 +69,11 @@ df.head()
 # Zoals eerder benoemd, is het goed mogelijk dat deze outliers daadwerkelijk valide waarden zijn, aangezien het om medische metingen in een ziekenhuisomgeving gaat, waar extreme waarden kunnen voorkomen. Tegelijkertijd roept de hoeveelheid outliers ook twijfel op over de betrouwbaarheid of interpretatie van sommige metingen.
 
 # %%
-plt.figure(figsize=(14, 12))
+# plt.figure(figsize=(14, 12))
 
-sns.boxplot(data=df.drop(columns=['Patient_ID', 'Hour', 'HospAdmTime', 'Unnamed: 0', 'Unit1', 'Unit2']))
-plt.ylim(-20, 450)
-plt.xticks(rotation=90)
+# sns.boxplot(data=df.drop(columns=['Patient_ID', 'Hour', 'HospAdmTime', 'Unnamed: 0', 'Unit1', 'Unit2']))
+# plt.ylim(-20, 450)
+# plt.xticks(rotation=90)
 
 # %% [markdown]
 # In de kolom `Gender` komen uitsluitend de waarden [0, 1] voor, wat erop wijst dat de variabele gecodeerd is. Hierdoor is op dit moment niet direct te achterhalen welk getal bij welk geslacht hoort binnen deze dataset.
@@ -131,11 +131,11 @@ getGenderPercentage(df)
 df.duplicated(subset=['Patient_ID']).sum()
 
 # %%
-test = df[['Patient_ID', 'HospAdmTime', 'Hour']].sort_values(by=['Patient_ID', 'Hour'])
-test.head(35)
+y_test_data = df[['Patient_ID', 'HospAdmTime', 'Hour']].sort_values(by=['Patient_ID', 'Hour'])
+y_test_data.head(35)
 
 # %%
-(test['Patient_ID'] == 2).sum()
+(y_test_data['Patient_ID'] == 2).sum()
 
 # %% [markdown]
 # In deze cyclus wordt afgezien van het gebruik van tijdsreeksen en ligt de nadruk op het toepassen van modellen zoals decision trees en random forests. In een volgende cyclus zal de data verder worden verrijkt. Hierbij zal per meting en per `Patient_ID` een tijdsverschil worden berekend, zodat modellen ontwikkeld kunnen worden die het tijdsverloop expliciet meenemen.
@@ -231,16 +231,16 @@ print(confusion_matrix(y_test, y_pred))
 # De visualisatie laat zien hoeveel patiënten in de trainingsdataset op basis van de SOFA-scores als sepsis worden geclassificeerd. Daarnaast zijn er enkele andere variabelen opgenomen, maar deze lijken weinig tot geen invloed te hebben op deze classificatie.
 
 # %%
-dt1_model = dtreeviz.model(
-    model,
-    X_train,
-    y_train,
-    feature_names=X_train.columns,
-    target_name='Sepsis',
-    class_names=["No Sepsis", "Sepsis"]
-)
+# dt1_model = dtreeviz.model(
+#     model,
+#     X_train,
+#     y_train,
+#     feature_names=X_train.columns,
+#     target_name='Sepsis',
+#     class_names=["No Sepsis", "Sepsis"]
+# )
 
-dt1_model.view(scale=2)
+# dt1_model.view(scale=2)
 
 # %% [markdown]
 # ## Random forest
@@ -272,18 +272,18 @@ print(confusion_matrix(y_test, y_pred))
 # Omdat dit model, net als een decision tree, gebruikmaakt van boomstructuren, kijkt het niet naar één enkele boom maar naar meerdere bomen om te bepalen of iemand wel of niet aan het sepsislabel voldoet. Door deze combinatie van meerdere bomen kan het model verschillende patronen meenemen in de beslissing. Daarom lijkt dit model geschikter dan een enkele decision tree, omdat het op basis van meer informatie en perspectieven tot een eindbeslissing komt.
 
 # %%
-rf1_tree = rf1_model.estimators_[0]
+# rf1_tree = rf1_model.estimators_[0]
 
-rf1_tree_model = dtreeviz.model(
-    rf1_tree,
-    X_train,
-    y_train,
-    feature_names=X_train.columns,
-    target_name='SepsisLabel',
-    class_names=["No Sepsis", "Sepsis"]
-)
+# rf1_tree_model = dtreeviz.model(
+#     rf1_tree,
+#     X_train,
+#     y_train,
+#     feature_names=X_train.columns,
+#     target_name='SepsisLabel',
+#     class_names=["No Sepsis", "Sepsis"]
+# )
 
-rf1_tree_model.view()
+# rf1_tree_model.view()
 
 # %% [markdown]
 # ### Reflectie
@@ -374,7 +374,8 @@ df['Sepsis_Future'] = df.groupby('Patient_ID')['SepsisLabel'].shift(-6)
 # Over deze stap is nog niet volledig duidelijk of deze noodzakelijk is. Hierbij worden alle rijen verwijderd waarvoor geen `Sepsis_Future`-waarde beschikbaar is. Voor het opschonen van de dataset, voorafgaand aan het trainen van het model, lijkt dit echter wel een zinvolle stap. Aangezien er geen data aanwezig is voor sommige patienten na een `X` aantal uren. Dit word dan automatisch als `NaN` gezet.
 
 # %%
-df = df.dropna(subset=['Sepsis_Future'])
+# df = df.dropna(subset=['Sepsis_Future'])
+df['Sepsis_Future'] = df['Sepsis_Future'].fillna(0)
 
 # %% [markdown]
 # ### Format Data
@@ -466,8 +467,8 @@ def get_train_test_data_by_patient(
 # %%
 X_train, y_train, X_test, y_test = get_train_test_data_by_patient(df, train_patients, test_patients)
 
-X_train = X_train.drop(columns=['Patient_ID'])
-X_test = X_test.drop(columns=['Patient_ID'])
+# X_train = X_train.drop(columns=['Patient_ID'])
+# X_test = X_test.drop(columns=['Patient_ID'])
 
 # %% [markdown]
 # ## Modeling
@@ -495,16 +496,16 @@ print(confusion_matrix(y_test, y_pred))
 # Kijkend naar het model valt op dat het slechts een beperkt aantal kenmerken gebruikt om te bepalen of iemand sepsis heeft of niet. Hierdoor lijkt het model onvoldoende complex en daarmee minder geschikt voor deze vraagstelling. Tegelijkertijd is het wel positief om te zien dat, ondanks deze beperkingen, er sprake is van een verbetering ten opzichte van de vorige aanpak.
 
 # %%
-dt2_model = dtreeviz.model(
-    model,
-    X_train,
-    y_train,
-    feature_names=X_train.columns,
-    target_name='Sepsis',
-    class_names=["No Sepsis", "Sepsis"]
-)
+# dt2_model = dtreeviz.model(
+#     model,
+#     X_train,
+#     y_train,
+#     feature_names=X_train.columns,
+#     target_name='Sepsis',
+#     class_names=["No Sepsis", "Sepsis"]
+# )
 
-dt2_model.view(scale=2)
+# dt2_model.view(scale=2)
 
 # %% [markdown]
 # ### Random Forest
@@ -529,10 +530,10 @@ rf2_model.fit(X_train, y_train)
 # Net als bij het vorige model geldt dat de prestaties realistischer zijn dan in de eerdere cyclus. Door de verbeterde datasplitsing op basis van unieke patiënten geeft dit model een betrouwbaarder beeld van de werkelijke prestaties, ook al zijn deze minder optimaal dan voorheen.
 
 # %%
-y_pred = rf2_model.predict(X_test)
+y_pred_rf2 = rf2_model.predict(X_test)
 
-print(classification_report(y_test, y_pred))
-print(confusion_matrix(y_test, y_pred))
+print(classification_report(y_test, y_pred_rf2))
+print(confusion_matrix(y_test, y_pred_rf2))
 
 # %% [markdown]
 # Uit deze visualisatie blijkt dat het model rekening houdt met een veel meer variabelen uit de dataset. In plaats van slechts enkele kenmerken, worden meerdere factoren meegenomen die gezamenlijk bijdragen aan de classificatie of iemand wel of geen sepsis heeft.
@@ -609,8 +610,8 @@ X_train, y_train, X_test, y_test = get_train_test_data_by_patient(df, train_pati
 X_train['visit_duration'] = calculateVisitTime(X_train)
 X_test['visit_duration'] = calculateVisitTime(X_test)
 
-X_train = X_train.drop(columns=['Patient_ID'])
-X_test = X_test.drop(columns=['Patient_ID'])
+# X_train = X_train.drop(columns=['Patient_ID'])
+# X_test = X_test.drop(columns=['Patient_ID'])
 
 
 # %% [markdown]
@@ -634,7 +635,7 @@ from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 # %% [markdown]
-# 
+# Niet werkend gekregen met huidige situatie van mijn dataset. Deze cycle word hierbij afgerond. Word in de volgende gekeken naar een boost model.
 
 # %% [markdown]
 # 
@@ -643,6 +644,41 @@ from statsmodels.tsa.statespace.sarimax import SARIMAX
 # 
 
 # %% [markdown]
-# 
+# # Korte export voor test voor de presentatie:
+
+# %%
+from scepsis_prediction.evaluation import compute_prediction_utility, evaluate_sepsis_score
+
+def export_prediction_set(X_test_data: pd.DataFrame, y_test_data: pd.Series, y_pred: np.ndarray) -> None:
+    def export_testlabels(copy: pd.DataFrame) -> None:
+        test_labels = copy
+        test_labels['SepsisLabel'] = y_test_data
+        test_labels = test_labels[['Patient_ID', 'SepsisLabel']]
+
+        test_labels.to_csv('testset (with label).csv', index=False)
+
+    def export_predictions(copy: pd.DataFrame) -> None:
+        predictions = copy
+        predictions['SepsisLabel'] = y_pred
+        predictions = predictions[['Patient_ID', 'SepsisLabel']]    
+
+        predictions.to_csv('predictions.csv', index=False)
+
+    copy = X_test_data.copy()
+
+    export_testlabels(copy)
+    export_predictions(copy)
+
+
+# %%
+export_prediction_set(X_test, y_test, y_pred_rf2)
+
+# %%
+utility = evaluate_sepsis_score(
+    "testset (with label).csv",
+    "predictions.csv"
+)
+
+print(utility)
 
 
