@@ -3,3 +3,6 @@ Name: scepsis-prediction
 Version: 0.1.0
 Summary: Utilities for sepsis prediction notebooks
 Requires-Python: >=3.10
+Requires-Dist: disutils>=1.4.32.post2
+Requires-Dist: setuptools>=82.0.1
+Requires-Dist: yellowbrick>=1.5

@@ -7,7 +7,11 @@ name = "scepsis-prediction"
 version = "0.1.0"
 description = "Utilities for sepsis prediction notebooks"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "disutils>=1.4.32.post2",
+    "setuptools>=82.0.1",
+    "yellowbrick>=1.5",
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
