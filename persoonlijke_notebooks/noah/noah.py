@@ -161,7 +161,7 @@ from scepsis_prediction.SofaCalculator import SofaCalculator
 sofa_calc = SofaCalculator(df)
 
 df = sofa_calc.calculate_all_values()
-df['SepsisLabel'] = sofa_calc.hasSepsis()
+#df['SepsisLabel'] = sofa_calc.hasSepsis()
 
 df.info()
 
@@ -308,7 +308,7 @@ print(confusion_matrix(y_test, y_pred))
 # Hier worden eerst de kolommen verwijders om ze opnieuw te berekenen.
 
 # %%
-df = df.drop(columns=['qSOFA_partial', 'SOFA_modified_total', 'SepsisLabel'])
+df = df.drop(columns=['qSOFA_partial', 'SOFA_modified_total'])
 
 # %% [markdown]
 # Hieronder worden de herberekeningen van deze waarden weergegeven. Dit keer worden de extra kolommen die nodig zijn voor de berekeningen wel in de dataset opgenomen. Daarnaast wordt het `sepsislabel` opnieuw toegevoegd aan de dataset.
@@ -317,7 +317,7 @@ df = df.drop(columns=['qSOFA_partial', 'SOFA_modified_total', 'SepsisLabel'])
 sofa_calc = SofaCalculator(df)
 
 df = sofa_calc.calculate_all_values(True, True)
-df['SepsisLabel'] = sofa_calc.hasSepsis()
+#df['SepsisLabel'] = sofa_calc.hasSepsis()
 
 # %% [markdown]
 # Hier is te zien dat er enkele extra kolommen zijn toegevoegd waarmee de SOFA-scores worden berekend. Dit betreft de variabelen `qsofa_resp`, `qsofa_sbp`, `SF_ratio`, `sofa_resp`, `sofa_coag`, `sofa_liver`, `sofa_cv` en `sofa_renal`. Deze waarden vormen de basis voor de punten waaruit de SOFA-scores worden opgebouwd.
@@ -374,8 +374,7 @@ df['Sepsis_Future'] = df.groupby('Patient_ID')['SepsisLabel'].shift(-6)
 # Over deze stap is nog niet volledig duidelijk of deze noodzakelijk is. Hierbij worden alle rijen verwijderd waarvoor geen `Sepsis_Future`-waarde beschikbaar is. Voor het opschonen van de dataset, voorafgaand aan het trainen van het model, lijkt dit echter wel een zinvolle stap. Aangezien er geen data aanwezig is voor sommige patienten na een `X` aantal uren. Dit word dan automatisch als `NaN` gezet.
 
 # %%
-# df = df.dropna(subset=['Sepsis_Future'])
-df['Sepsis_Future'] = df['Sepsis_Future'].fillna(0)
+df['Sepsis_Future'] = df['Sepsis_Future'].fillna(1)
 
 # %% [markdown]
 # ### Format Data
@@ -467,8 +466,11 @@ def get_train_test_data_by_patient(
 # %%
 X_train, y_train, X_test, y_test = get_train_test_data_by_patient(df, train_patients, test_patients)
 
-# X_train = X_train.drop(columns=['Patient_ID'])
-# X_test = X_test.drop(columns=['Patient_ID'])
+train_patient_ids = X_train['Patient_ID'].values
+test_patient_ids = X_test['Patient_ID'].values
+
+X_train = X_train.drop(columns=['Patient_ID'])
+X_test = X_test.drop(columns=['Patient_ID'])
 
 # %% [markdown]
 # ## Modeling
@@ -487,10 +489,10 @@ model.fit(X_train, y_train)
 # Hoewel de prestaties op het eerste gezicht slechter lijken, is dit juist een positieve ontwikkeling. In de vorige cyclus was er sprake van datalekken en een onjuiste datasplitsing, waardoor de resultaten te optimistisch waren. In de huidige aanpak is de data correct verdeeld op basis van unieke patiënten, wat zorgt voor een realistischer en betrouwbaarder beeld van de modelprestaties.
 
 # %%
-y_pred = model.predict(X_test)
+y_pred_dt2 = model.predict(X_test)
 
-print(classification_report(y_test, y_pred))
-print(confusion_matrix(y_test, y_pred))
+print(classification_report(y_test, y_pred_dt2))
+print(confusion_matrix(y_test, y_pred_dt2))
 
 # %% [markdown]
 # Kijkend naar het model valt op dat het slechts een beperkt aantal kenmerken gebruikt om te bepalen of iemand sepsis heeft of niet. Hierdoor lijkt het model onvoldoende complex en daarmee minder geschikt voor deze vraagstelling. Tegelijkertijd is het wel positief om te zien dat, ondanks deze beperkingen, er sprake is van een verbetering ten opzichte van de vorige aanpak.
@@ -610,8 +612,8 @@ X_train, y_train, X_test, y_test = get_train_test_data_by_patient(df, train_pati
 X_train['visit_duration'] = calculateVisitTime(X_train)
 X_test['visit_duration'] = calculateVisitTime(X_test)
 
-# X_train = X_train.drop(columns=['Patient_ID'])
-# X_test = X_test.drop(columns=['Patient_ID'])
+X_train = X_train.drop(columns=['Patient_ID'])
+X_test = X_test.drop(columns=['Patient_ID'])
 
 
 # %% [markdown]
@@ -649,29 +651,21 @@ from statsmodels.tsa.statespace.sarimax import SARIMAX
 # %%
 from scepsis_prediction.evaluation import compute_prediction_utility, evaluate_sepsis_score
 
-def export_prediction_set(X_test_data: pd.DataFrame, y_test_data: pd.Series, y_pred: np.ndarray) -> None:
-    def export_testlabels(copy: pd.DataFrame) -> None:
-        test_labels = copy
-        test_labels['SepsisLabel'] = y_test_data
-        test_labels = test_labels[['Patient_ID', 'SepsisLabel']]
+def export_prediction_set(test_patient_ids, df_original, y_pred):
+    test_df = df_original[df_original['Patient_ID'].isin(test_patient_ids)].copy()
+    test_df = test_df.sort_values(['Patient_ID', 'Hour'])
 
-        test_labels.to_csv('testset (with label).csv', index=False)
+    # Ground truth
+    true_labels = test_df[['Patient_ID', 'SepsisLabel']]
+    true_labels.to_csv('testset (with label).csv', index=False)
 
-    def export_predictions(copy: pd.DataFrame) -> None:
-        predictions = copy
-        predictions['SepsisLabel'] = y_pred
-        predictions = predictions[['Patient_ID', 'SepsisLabel']]    
-
-        predictions.to_csv('predictions.csv', index=False)
-
-    copy = X_test_data.copy()
-
-    export_testlabels(copy)
-    export_predictions(copy)
-
+    # Predictions 
+    predictions = test_df[['Patient_ID']].copy()
+    predictions['SepsisLabel'] = y_pred
+    predictions.to_csv('predictions.csv', index=False)
 
 # %%
-export_prediction_set(X_test, y_test, y_pred_rf2)
+export_prediction_set(test_patient_ids, df, y_pred_rf2)
 
 # %%
 utility = evaluate_sepsis_score(
