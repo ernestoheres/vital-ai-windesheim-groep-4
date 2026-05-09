@@ -34,12 +34,39 @@ import os
 sys.path.append(os.path.abspath("../../src"))
 
 # %%
+def export_prediction_set(test_patient_ids, df_original, y_pred):
+    test_df = df_original[df_original['Patient_ID'].isin(test_patient_ids)].copy()
+    test_df = test_df.sort_values(['Patient_ID', 'Hour'])
+
+    # Ground truth
+    true_labels = test_df[['Patient_ID', 'SepsisLabel']]
+    true_labels.to_csv('testset (with label).csv', index=False)
+
+    # Predictions 
+    predictions = test_df[['Patient_ID']].copy()
+    predictions['SepsisLabel'] = y_pred
+    predictions.to_csv('predictions.csv', index=False)
+
+# %%
+from scepsis_prediction.evaluation import compute_prediction_utility, evaluate_sepsis_score
+
+def print_utiltiy_score(
+        testset: str = "testset (with label).csv",
+        predictions: str = "predictions.csv"
+) -> None:
+    utility = evaluate_sepsis_score(testset, predictions)
+    print(utility)
+
+# %%
 import pandas as pd
 import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
 
-df = pd.read_csv('../../data/train_data.csv', sep=',')
+def read_dataset() -> pd.DataFrame:
+    return pd.read_csv('../../data/train_data.csv', sep=',')
+
+df = read_dataset()
 
 # %% [markdown]
 # De dataset bevat een groot aantal variabelen, namelijk 43 kolommen. Het merendeel hiervan bestaat uit medische metingen die bij patiënten zijn uitgevoerd.
@@ -383,22 +410,7 @@ df['Sepsis_Future'] = df['Sepsis_Future'].fillna(1)
 # In deze cyclus worden deze samengestelde scores bewust weggelaten. In plaats daarvan wordt uitsluitend gekeken naar de onderliggende medische parameters die samen de SOFA- en qSOFA-scores vormen. Op basis van deze ruwe gegevens wordt vervolgens bepaald of een patiënt sepsis heeft, met als doel een robuuster en realistischer voorspellingsmodel te ontwikkelen. Daarnaast ligt de focus ditmaal niet alleen op het vaststellen of een patiënt op dit moment sepsis heeft, maar juist op het voorspellen of een patiënt dit in de toekomst zal ontwikkelen.
 
 # %%
-qsofa_features = [col for col in df.columns if 'qsofa' in col.lower()]
-
-sofa_features = [
-    col for col in df.columns
-    if 'sofa' in col.lower() and col not in qsofa_features
-] + ['SF_ratio']
-
-unit_features = [col for col in df.columns if 'unit' in col.lower()]
-
-drop_cols = [
-    'SepsisLabel', 
-    'Sepsis_Future',
-    *qsofa_features, 
-    *sofa_features, 
-    *unit_features
-]
+# TODO: Tekst hierboven bij werken
 
 # %% [markdown]
 # In de vorige cyclus werd het opsplitsen van de data niet correct uitgevoerd. De dataset werd willekeurig verdeeld, waardoor dezelfde patiënten zowel in de `train`- als in de `test`-set terechtkwamen, met hun verschillende bezoeken verspreid over beide sets. Dit is onlogisch en leidt bovendien tot een vertekende en onevenwichtige verdeling van de data.
@@ -435,16 +447,38 @@ train_patients, test_patients = train_test_split_by_patient(df)
 # Daarnaast worden in deze stap de invoervariabelen (`X`) en de doelvariabele (`y`) gescheiden voor zowel de train- als de testset.
 
 # %%
-TrainTestSplit = tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]
+TrainTestSplit = tuple[pd.DataFrame, pd.Series, np.array, pd.DataFrame, pd.Series, np.array]
 
 def get_train_test_data_by_patient(
     data: pd.DataFrame,
     train_patients: pd.DataFrame, 
     test_patients: pd.DataFrame,
     y_target: str = 'Sepsis_Future',
-    group_col: str = 'Patient_ID'
+    group_col: str = 'Patient_ID',
+    delete_patient_ids: bool = False
 ) -> TrainTestSplit:
     df = data.copy()
+
+    qsofa_features = [col for col in df.columns if 'qsofa' in col.lower()]
+
+    sofa_features = [
+        col for col in df.columns
+        if 'sofa' in col.lower() and col not in qsofa_features
+    ]
+
+    if 'SF_ratio' in df.columns:
+        sofa_features.append('SF_ratio')
+
+    unit_features = [col for col in df.columns if 'unit' in col.lower()]
+
+    drop_cols = [
+        'SepsisLabel', 
+        'Sepsis_Future',
+        *qsofa_features, 
+        *sofa_features, 
+        *unit_features
+    ]
+
     train = train_patients.copy()
     test = test_patients.copy()
 
@@ -457,20 +491,23 @@ def get_train_test_data_by_patient(
     X_test = test_df.drop(columns=drop_cols)
     y_test = test_df[y_target].astype(int)
 
-    return X_train, y_train, X_test, y_test
+    # Patient_ID is nodig voor het bereken van de utility score, maar het model mag niet trainen hierop
+    # Daarom worden deze eruit gefilterd en daarna verwijderd uit de test sets
+    train_patient_ids = X_train['Patient_ID'].values
+    test_patient_ids = X_test['Patient_ID'].values
+
+    if delete_patient_ids:
+        X_train = X_train.drop(columns=['Patient_ID'])
+        X_test = X_test.drop(columns=['Patient_ID'])
+
+    return X_train, y_train, train_patient_ids, X_test, y_test, test_patient_ids
 
 
 # %% [markdown]
 # Hieronder worden de `train`- en `test`-sets opgehaald op basis van de huidige dataset. Voor deze voorspelling is `Patient_ID` overbodig en word deze daarom nog verwijderd.
 
 # %%
-X_train, y_train, X_test, y_test = get_train_test_data_by_patient(df, train_patients, test_patients)
-
-train_patient_ids = X_train['Patient_ID'].values
-test_patient_ids = X_test['Patient_ID'].values
-
-X_train = X_train.drop(columns=['Patient_ID'])
-X_test = X_test.drop(columns=['Patient_ID'])
+X_train, y_train, train_patient_ids, X_test, y_test, test_patient_ids = get_train_test_data_by_patient(df, train_patients, test_patients, delete_patient_ids=True)
 
 # %% [markdown]
 # ## Modeling
@@ -509,6 +546,18 @@ print(confusion_matrix(y_test, y_pred_dt2))
 
 # dt2_model.view(scale=2)
 
+# %%
+export_prediction_set(test_patient_ids, df, y_pred_dt2)
+print_utiltiy_score()
+
+# %%
+# utility = evaluate_sepsis_score(
+#     "testset (with label).csv",
+#     "predictions.csv"
+# )
+
+# print(utility)
+
 # %% [markdown]
 # ### Random Forest
 # Hetzelfde geldt hier. Het model wordt op dezelfde manier opgebouwd als het vorige, maar ditmaal met gebruik van de nieuwe `train`- en `test`datasets.
@@ -516,7 +565,7 @@ print(confusion_matrix(y_test, y_pred_dt2))
 # %%
 rf2_model = RandomForestClassifier(
     n_estimators=100,        
-    max_depth=10,           
+    max_depth=3,           
     class_weight='balanced', 
     random_state=42,
     n_jobs=-1                
@@ -555,6 +604,10 @@ print(confusion_matrix(y_test, y_pred_rf2))
 # )
 
 # rf2_tree_model.view(scale=2)
+
+# %%
+export_prediction_set(test_patient_ids, df, y_pred_rf2)
+print_utiltiy_score()
 
 # %% [markdown]
 # ## Reflectie
@@ -607,13 +660,10 @@ def calculateVisitTime(data: pd.DataFrame) -> pd.Series:
 # %%
 train_patients, test_patients = train_test_split_by_patient(df)
 
-X_train, y_train, X_test, y_test = get_train_test_data_by_patient(df, train_patients, test_patients)
+X_train, y_train, _, X_test, y_test, _ = get_train_test_data_by_patient(df, train_patients, test_patients)
 
 X_train['visit_duration'] = calculateVisitTime(X_train)
 X_test['visit_duration'] = calculateVisitTime(X_test)
-
-X_train = X_train.drop(columns=['Patient_ID'])
-X_test = X_test.drop(columns=['Patient_ID'])
 
 
 # %% [markdown]
@@ -640,39 +690,225 @@ from statsmodels.tsa.statespace.sarimax import SARIMAX
 # Niet werkend gekregen met huidige situatie van mijn dataset. Deze cycle word hierbij afgerond. Word in de volgende gekeken naar een boost model.
 
 # %% [markdown]
-# 
+# # Cycle IV
 
 # %% [markdown]
-# 
+# ## Voorbereiding
+
+# %%
+X_train = X_train.drop(columns=['visit_duration'])
+X_test = X_test.drop(columns=['visit_duration'])
 
 # %% [markdown]
-# # Korte export voor test voor de presentatie:
+# ## Data preperation
+# ### Clean Data
+
+# %% [markdown]
+# ### Construct Data
+
+# %% [markdown]
+# ### Format Data
+
+# %% [markdown]
+# ## Modeling
+# 
+# ### Gradient boosting
 
 # %%
-from scepsis_prediction.evaluation import compute_prediction_utility, evaluate_sepsis_score
+from sklearn.ensemble import GradientBoostingClassifier
 
-def export_prediction_set(test_patient_ids, df_original, y_pred):
-    test_df = df_original[df_original['Patient_ID'].isin(test_patient_ids)].copy()
-    test_df = test_df.sort_values(['Patient_ID', 'Hour'])
-
-    # Ground truth
-    true_labels = test_df[['Patient_ID', 'SepsisLabel']]
-    true_labels.to_csv('testset (with label).csv', index=False)
-
-    # Predictions 
-    predictions = test_df[['Patient_ID']].copy()
-    predictions['SepsisLabel'] = y_pred
-    predictions.to_csv('predictions.csv', index=False)
-
-# %%
-export_prediction_set(test_patient_ids, df, y_pred_rf2)
-
-# %%
-utility = evaluate_sepsis_score(
-    "testset (with label).csv",
-    "predictions.csv"
+gb1_model = GradientBoostingClassifier(
+    n_estimators=100,
+    learning_rate=0.1,
+    max_depth=3,
+    random_state=42
 )
 
-print(utility)
+gb1_model.fit(X_train, y_train)
+
+# %%
+y_pred_gb1 = gb1_model.predict(X_test)
+
+print(classification_report(y_test, y_pred_gb1))
+print(confusion_matrix(y_test, y_pred_gb1))
+
+# %%
+export_prediction_set(test_patient_ids, df, y_pred_gb1)
+print_utiltiy_score()
+
+# %% [markdown]
+# ### Xgboost
+
+# %%
+from xgboost import XGBClassifier
+
+xgb1_model = XGBClassifier(
+    n_estimators=200,
+    learning_rate=0.05,
+    max_depth=4,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    random_state=42,
+    eval_metric='logloss'
+)
+
+xgb1_model.fit(X_train, y_train)
+
+# %%
+y_pred_xgb1 = xgb1_model.predict(X_test)
+
+print(classification_report(y_test, y_pred_xgb1))
+print(confusion_matrix(y_test, y_pred_xgb1))
+
+# %%
+export_prediction_set(test_patient_ids, df, y_pred_xgb1)
+print_utiltiy_score()
+
+# %% [markdown]
+# ## Reflectie
+
+# %% [markdown]
+# Betere resultaten dan een Random Forest. Voor een betere toekomstig model moet er bv gekeken naar feature engineering en het verbeteren van de missende data. Omdat deze allemaal op 0 geplaast zijn.
+
+# %% [markdown]
+# # Cycle V
+# In deze cycle wil ik de focus leggen op het opnieuw verwerken/resetten van de dataset. Dit voornamelijk om de missende waardes beter bij te vullen. Hierdoor hoop ik dat de medische waardes die ik bereken voor de `SOFA`-scores ook wat meer voorstellen dam dat ze nu doen. Grotendeels van de aanpassingen en toevoegingnen ik aan de dataset ga hier wel herhaald worden. Hiervoor ga ik in de vorige cycles daar wat functies voor aanmaken zodat ik die gewoon kan aanroepen en dat ik deze niet handmatig moet overneemen wat dubbele code verhelpt.
+# 
+# ## Voorbereiding
+# Hier word eerst de data opnieuw ingelezen en wat andere simpele stappen die in voorgaande cycles ook is uitgevoerd.
+
+# %%
+def prep_dataset(data: pd.DataFrame) -> pd.DataFrame:
+    df = data.copy()
+
+    # Onnodige kolommen verwijderen
+    df = df.drop(columns=['Unnamed: 0'])
+
+    # Sepsis_Future correct instellen
+    df = df.sort_values(['Patient_ID', 'Hour'])
+
+    df['Sepsis_Future'] = df.groupby('Patient_ID')['SepsisLabel'].shift(-6)
+    df['Sepsis_Future'] = df['Sepsis_Future'].dropna()
+    
+    return df
+
+# %%
+df = read_dataset()
+df = prep_dataset(df)
+
+# %% [markdown]
+# ## Data preperation
+# ### Clean Data
+
+# %% [markdown]
+# ### Construct Data
+
+# %%
+from scepsis_prediction.feature_engineering import add_all_features
+
+df = add_all_features(df, include_rolling=False, include_temporal=False)
+
+df = df.ffill().bfill()
+
+# %%
+print(df.isnull().sum())
+
+# %% [markdown]
+# ### Format Data
+
+# %%
+X_train, y_train, train_patient_ids, X_test, y_test, test_patient_ids = get_train_test_data_by_patient(df, train_patients, test_patients, delete_patient_ids=True)
+
+# %% [markdown]
+# ## Modeling
+# 
+# ### Random forest
+
+# %%
+rf5_model = RandomForestClassifier(
+    n_estimators=100,        
+    max_depth=3,           
+    class_weight='balanced', 
+    random_state=42,
+    n_jobs=-1                
+)
+
+rf5_model.fit(X_train, y_train)
+
+# %%
+y_pred_rf5 = rf5_model.predict(X_test)
+
+print(classification_report(y_test, y_pred_rf5))
+print(confusion_matrix(y_test, y_pred_rf5))
+
+# %%
+# rf2_tree = rf2_model.estimators_[0]
+
+# rf2_tree_model = dtreeviz.model(
+#     rf2_tree,
+#     X_train.drop(columns=['Patient_ID']),
+#     y_train,
+#     feature_names=X_train.columns,
+#     target_name='SepsisLabel',
+#     class_names=["No Sepsis", "Sepsis"]
+# )
+
+# rf2_tree_model.view(scale=2)
+
+# %%
+export_prediction_set(test_patient_ids, df, y_pred_rf5)
+print_utiltiy_score()
+
+# %% [markdown]
+# ### Gradient boosting
+
+# %%
+gb5_model = GradientBoostingClassifier(
+    n_estimators=100,
+    learning_rate=0.1,
+    max_depth=3,
+    random_state=42
+)
+
+gb5_model.fit(X_train, y_train)
+
+# %%
+y_pred_gb5 = gb5_model.predict(X_test)
+
+print(classification_report(y_test, y_pred_gb5))
+print(confusion_matrix(y_test, y_pred_gb5))
+
+# %%
+export_prediction_set(test_patient_ids, df, y_pred_gb5)
+print_utiltiy_score()
+
+# %% [markdown]
+# ### Xgboost
+
+# %%
+xgb5_model = XGBClassifier(
+    n_estimators=200,
+    learning_rate=0.05,
+    max_depth=4,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    random_state=42,
+    eval_metric='logloss'
+)
+
+xgb5_model.fit(X_train, y_train)
+
+# %%
+y_pred_xgb5 = xgb5_model.predict(X_test)
+
+print(classification_report(y_test, y_pred_xgb5))
+print(confusion_matrix(y_test, y_pred_xgb5))
+
+# %%
+export_prediction_set(test_patient_ids, df, y_pred_xgb5)
+print_utiltiy_score()
+
+# %% [markdown]
+# ## Reflectie
 
 
