@@ -788,7 +788,7 @@ def prep_dataset(data: pd.DataFrame) -> pd.DataFrame:
     df = df.sort_values(['Patient_ID', 'Hour'])
 
     df['Sepsis_Future'] = df.groupby('Patient_ID')['SepsisLabel'].shift(-6)
-    df['Sepsis_Future'] = df['Sepsis_Future'].dropna()
+    df = df.dropna(subset=['Sepsis_Future'])
     
     return df
 
@@ -806,7 +806,7 @@ df = prep_dataset(df)
 # %%
 from scepsis_prediction.feature_engineering import add_all_features
 
-df = add_all_features(df, include_rolling=False, include_temporal=False)
+df = add_all_features(df, include_rolling=True, include_temporal=True)
 
 df = df.ffill().bfill()
 
@@ -910,5 +910,252 @@ print_utiltiy_score()
 
 # %% [markdown]
 # ## Reflectie
+# In alle gevallen is de random forest slecht
+# 
+# # Cycle VI
+
+# %% [markdown]
+# 
+
+# %%
+import optuna
+
+from sklearn.metrics import (
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
+
+from lightgbm import LGBMClassifier
+
+FEATURE_CONFIGS = {
+    "all": {
+        "include_rolling": True,
+        "include_temporal": True,
+    },
+    "temporal_only": {
+        "include_rolling": False,
+        "include_temporal": True,
+    },
+    "rolling_only": {
+        "include_rolling": True,
+        "include_temporal": False,
+    },
+    "base": {
+        "include_rolling": False,
+        "include_temporal": False,
+    },
+}
+
+def create_model(trial, model_name):
+    if model_name == "gbm":
+
+        params = {
+            "n_estimators": trial.suggest_int("n_estimators", 50, 500),
+            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3),
+            "max_depth": trial.suggest_int("max_depth", 2, 8),
+            "subsample": trial.suggest_float("subsample", 0.5, 1.0),
+            "random_state": 42,
+        }
+
+        model = GradientBoostingClassifier(**params)
+
+    elif model_name == "xgb":
+        params = {
+            "n_estimators": trial.suggest_int("n_estimators", 100, 1000),
+            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3),
+            "max_depth": trial.suggest_int("max_depth", 3, 12),
+            "subsample": trial.suggest_float("subsample", 0.5, 1.0),
+            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
+            "min_child_weight": trial.suggest_int("min_child_weight", 1, 10),
+            "random_state": 42,
+            "eval_metric": "logloss",
+            "verbosity": 0,
+        }
+
+        model = XGBClassifier(**params)
+
+    elif model_name == "lgbm":
+        params = {
+            "n_estimators": trial.suggest_int("n_estimators", 100, 1000),
+            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3),
+            "max_depth": trial.suggest_int("max_depth", 3, 12),
+            "num_leaves": trial.suggest_int("num_leaves", 15, 255),
+            "subsample": trial.suggest_float("subsample", 0.5, 1.0),
+            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
+            "random_state": 42,
+            "verbosity": -1,
+        }
+
+        model = LGBMClassifier(**params)
+
+    else:
+        raise ValueError(f"Unknown model: {model_name}")
+
+    return model
+
+def objective(
+    trial,
+    X_train,
+    y_train,
+    X_test,
+    y_test,
+    model_name,
+):
+    threshold = trial.suggest_float("threshold", 0.05, 0.95)
+
+    model = create_model(trial, model_name)
+    model.fit(X_train, y_train)
+
+    proba = model.predict_proba(X_test)[:, 1]
+    preds = (proba >= threshold).astype(int)
+
+    score = f1_score(y_test, preds)
+
+    return score
+
+
+def run_all_experiments(
+    train_patients,
+    test_patients,
+    n_trials=50,
+):
+
+    all_results = []
+
+    model_names = [
+        "gbm",
+        "xgb",
+        "lgbm",
+    ]
+
+    for feature_set_name, feature_kwargs in FEATURE_CONFIGS.items():
+
+        print("\n" + "=" * 80)
+        print(f"FEATURE SET: {feature_set_name}")
+        print("=" * 80)
+
+        df = read_dataset()
+        df = prep_dataset(df)
+
+        df = add_all_features(
+            df,
+            **feature_kwargs,
+        )
+
+        df = df.ffill().bfill()
+
+        (
+            X_train,
+            y_train,
+            train_patient_ids,
+            X_test,
+            y_test,
+            test_patient_ids,
+        ) = get_train_test_data_by_patient(
+            df,
+            train_patients,
+            test_patients,
+            delete_patient_ids=True,
+        )
+
+        print(f"\nTrain shape: {X_train.shape}")
+        print(f"Test shape: {X_test.shape}")
+
+        print(f"Train positives: {y_train.sum()}")
+        print(f"Test positives: {y_test.sum()}")
+
+        for model_name in model_names:
+
+            print("\n" + "-" * 50)
+            print(f"Running model: {model_name}")
+            print("-" * 50)
+
+            study = optuna.create_study(
+                direction="maximize",
+            )
+
+            study.optimize(
+                lambda trial: objective(
+                    trial,
+                    X_train,
+                    y_train,
+                    X_test,
+                    y_test,
+                    model_name,
+                ),
+                n_trials=n_trials,
+                show_progress_bar=True,
+            )
+
+            best_params = study.best_params
+            best_threshold = best_params.pop("threshold")
+
+            final_model = create_model(
+                optuna.trial.FixedTrial(best_params),
+                model_name,
+            )
+
+            final_model.fit(X_train, y_train)
+
+            final_proba = final_model.predict_proba(X_test)[:, 1]
+
+            final_preds = (
+                final_proba >= best_threshold
+            ).astype(int)
+
+            final_f1 = f1_score(y_test, final_preds)
+
+            final_precision = precision_score(
+                y_test,
+                final_preds,
+                zero_division=0,
+            )
+
+            final_recall = recall_score(
+                y_test,
+                final_preds,
+                zero_division=0,
+            )
+
+            final_auc = roc_auc_score(
+                y_test,
+                final_proba,
+            )
+
+            result = {
+                "feature_set": feature_set_name,
+                "model": model_name,
+                "f1": final_f1,
+                "precision": final_precision,
+                "recall": final_recall,
+                "roc_auc": final_auc,
+                "threshold": best_threshold,
+                "best_params": best_params,
+            }
+
+            all_results.append(result)
+
+            print("\nBEST RESULT")
+            print(result)
+
+    results_df = pd.DataFrame(all_results)
+
+    results_df = results_df.sort_values(
+        by="f1",
+        ascending=False,
+    )
+
+    return results_df
+
+# %%
+results = run_all_experiments(
+    df=df,
+    target_column="target",
+    n_trials=100,
+)
+
+print(results)
 
 

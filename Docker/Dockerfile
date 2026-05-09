@@ -9,6 +9,6 @@ RUN pip install \
  jupyter ipywidgets ipykernel pandas numpy scikit-learn \
  seaborn matplotlib statsmodels torch==2.5 neuralprophet minisom \
  plotly-resampler openpyxl geopandas folium palmerpenguins \
- ucimlrepo xgboost dtreeviz 
+ ucimlrepo xgboost dtreeviz lightgbm
 
 WORKDIR "/tmp"
