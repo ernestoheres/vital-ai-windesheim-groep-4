@@ -238,21 +238,21 @@ X_train, X_test, y_train, y_test = train_test_split(
 # Dit model wordt getraind op basis van het sepsislabel. Hierdoor kan op basis van de SOFA-scores worden voorspeld of een patiënt in de categorie sepsis valt.
 
 # %%
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import classification_report, confusion_matrix
-import dtreeviz
+# from sklearn.tree import DecisionTreeClassifier
+# from sklearn.metrics import classification_report, confusion_matrix
+# import dtreeviz
 
-model = DecisionTreeClassifier(max_depth=3, class_weight='balanced')
-model.fit(X_train, y_train)
+# model = DecisionTreeClassifier(max_depth=3, class_weight='balanced')
+# model.fit(X_train, y_train)
 
 # %% [markdown]
 # De prestaties van het model zijn uitzonderlijk goed, maar vereisen nadere controle om te bevestigen of dit correct is.
 
 # %%
-y_pred = model.predict(X_test)
+# y_pred = model.predict(X_test)
 
-print(classification_report(y_test, y_pred))
-print(confusion_matrix(y_test, y_pred))
+# print(classification_report(y_test, y_pred))
+# print(confusion_matrix(y_test, y_pred))
 
 # %% [markdown]
 # De visualisatie laat zien hoeveel patiënten in de trainingsdataset op basis van de SOFA-scores als sepsis worden geclassificeerd. Daarnaast zijn er enkele andere variabelen opgenomen, maar deze lijken weinig tot geen invloed te hebben op deze classificatie.
@@ -274,26 +274,26 @@ print(confusion_matrix(y_test, y_pred))
 # Net als bij het vorige model wordt ook dit model getraind om het sepsislabel te herkennen. Dit gebeurt op een vergelijkbare manier als bij de decision tree.
 
 # %%
-from sklearn.ensemble import RandomForestClassifier
+# from sklearn.ensemble import RandomForestClassifier
 
-rf1_model = RandomForestClassifier(
-    n_estimators=100,        
-    max_depth=10,           
-    class_weight='balanced', 
-    random_state=42,
-    n_jobs=-1                
-)
+# rf1_model = RandomForestClassifier(
+#     n_estimators=100,        
+#     max_depth=10,           
+#     class_weight='balanced', 
+#     random_state=42,
+#     n_jobs=-1                
+# )
 
-rf1_model.fit(X_train, y_train)
+# rf1_model.fit(X_train, y_train)
 
 # %% [markdown]
 # Net zoals bij het voirge lijkt dit model perfect. Dit is heel onwaarschijnlijk en moet dus ook nader na gekekn worden of dit wel correct is.
 
 # %%
-y_pred = rf1_model.predict(X_test)
+# y_pred = rf1_model.predict(X_test)
 
-print(classification_report(y_test, y_pred))
-print(confusion_matrix(y_test, y_pred))
+# print(classification_report(y_test, y_pred))
+# print(confusion_matrix(y_test, y_pred))
 
 # %% [markdown]
 # Omdat dit model, net als een decision tree, gebruikmaakt van boomstructuren, kijkt het niet naar één enkele boom maar naar meerdere bomen om te bepalen of iemand wel of niet aan het sepsislabel voldoet. Door deze combinatie van meerdere bomen kan het model verschillende patronen meenemen in de beslissing. Daarom lijkt dit model geschikter dan een enkele decision tree, omdat het op basis van meer informatie en perspectieven tot een eindbeslissing komt.
@@ -401,7 +401,7 @@ df['Sepsis_Future'] = df.groupby('Patient_ID')['SepsisLabel'].shift(-6)
 # Over deze stap is nog niet volledig duidelijk of deze noodzakelijk is. Hierbij worden alle rijen verwijderd waarvoor geen `Sepsis_Future`-waarde beschikbaar is. Voor het opschonen van de dataset, voorafgaand aan het trainen van het model, lijkt dit echter wel een zinvolle stap. Aangezien er geen data aanwezig is voor sommige patienten na een `X` aantal uren. Dit word dan automatisch als `NaN` gezet.
 
 # %%
-df['Sepsis_Future'] = df['Sepsis_Future'].fillna(1)
+df = df.dropna(subset=['Sepsis_Future'])
 
 # %% [markdown]
 # ### Format Data
@@ -502,7 +502,6 @@ def get_train_test_data_by_patient(
 
     return X_train, y_train, train_patient_ids, X_test, y_test, test_patient_ids
 
-
 # %% [markdown]
 # Hieronder worden de `train`- en `test`-sets opgehaald op basis van de huidige dataset. Voor deze voorspelling is `Patient_ID` overbodig en word deze daarom nog verwijderd.
 
@@ -517,8 +516,8 @@ X_train, y_train, train_patient_ids, X_test, y_test, test_patient_ids = get_trai
 # Hieronder wordt de opbouw van de nieuwe decision tree weergegeven. Hierbij ligt de focus met name op de `classification report` en de `confusion matrix`, om te beoordelen of het model daadwerkelijk is verbeterd. Het model wordt getraind en geëvalueerd met de eerder samengestelde `train`- en `test`-datasets.
 
 # %%
-model = DecisionTreeClassifier(max_depth=3, class_weight='balanced')
-model.fit(X_train, y_train)
+# model = DecisionTreeClassifier(max_depth=3, class_weight='balanced')
+# model.fit(X_train, y_train)
 
 # %% [markdown]
 # Uit de resultaten blijkt dat het model minder goed presteert dan in de vorige cyclus. Met name de lage precision voor klasse 1 en de relatief hoge hoeveelheid fout-positieve voorspellingen laten zien dat het model moeite heeft om sepsis nauwkeurig te identificeren. Tegelijkertijd is de recall voor klasse 1 wel hoog, wat betekent dat een groot deel van de daadwerkelijke gevallen wordt herkend, maar ten koste van veel onterechte voorspellingen.
@@ -526,10 +525,10 @@ model.fit(X_train, y_train)
 # Hoewel de prestaties op het eerste gezicht slechter lijken, is dit juist een positieve ontwikkeling. In de vorige cyclus was er sprake van datalekken en een onjuiste datasplitsing, waardoor de resultaten te optimistisch waren. In de huidige aanpak is de data correct verdeeld op basis van unieke patiënten, wat zorgt voor een realistischer en betrouwbaarder beeld van de modelprestaties.
 
 # %%
-y_pred_dt2 = model.predict(X_test)
+# y_pred_dt2 = model.predict(X_test)
 
-print(classification_report(y_test, y_pred_dt2))
-print(confusion_matrix(y_test, y_pred_dt2))
+# print(classification_report(y_test, y_pred_dt2))
+# print(confusion_matrix(y_test, y_pred_dt2))
 
 # %% [markdown]
 # Kijkend naar het model valt op dat het slechts een beperkt aantal kenmerken gebruikt om te bepalen of iemand sepsis heeft of niet. Hierdoor lijkt het model onvoldoende complex en daarmee minder geschikt voor deze vraagstelling. Tegelijkertijd is het wel positief om te zien dat, ondanks deze beperkingen, er sprake is van een verbetering ten opzichte van de vorige aanpak.
@@ -547,8 +546,8 @@ print(confusion_matrix(y_test, y_pred_dt2))
 # dt2_model.view(scale=2)
 
 # %%
-export_prediction_set(test_patient_ids, df, y_pred_dt2)
-print_utiltiy_score()
+# export_prediction_set(test_patient_ids, df, y_pred_dt2)
+# print_utiltiy_score()
 
 # %%
 # utility = evaluate_sepsis_score(
@@ -563,15 +562,15 @@ print_utiltiy_score()
 # Hetzelfde geldt hier. Het model wordt op dezelfde manier opgebouwd als het vorige, maar ditmaal met gebruik van de nieuwe `train`- en `test`datasets.
 
 # %%
-rf2_model = RandomForestClassifier(
-    n_estimators=100,        
-    max_depth=3,           
-    class_weight='balanced', 
-    random_state=42,
-    n_jobs=-1                
-)
+# rf2_model = RandomForestClassifier(
+#     n_estimators=100,        
+#     max_depth=3,           
+#     class_weight='balanced', 
+#     random_state=42,
+#     n_jobs=-1                
+# )
 
-rf2_model.fit(X_train, y_train)
+# rf2_model.fit(X_train, y_train)
 
 # %% [markdown]
 # Uit de resultaten van het random forest blijkt dat het model beter presteert dan de decision tree. De accuracy ligt hoger en ook de verdeling in de confusion matrix laat zien dat er minder fout-positieve voorspellingen worden gedaan. Dit wijst erop dat het model beter in staat is om onderscheid te maken tussen de klassen.
@@ -581,10 +580,10 @@ rf2_model.fit(X_train, y_train)
 # Net als bij het vorige model geldt dat de prestaties realistischer zijn dan in de eerdere cyclus. Door de verbeterde datasplitsing op basis van unieke patiënten geeft dit model een betrouwbaarder beeld van de werkelijke prestaties, ook al zijn deze minder optimaal dan voorheen.
 
 # %%
-y_pred_rf2 = rf2_model.predict(X_test)
+# y_pred_rf2 = rf2_model.predict(X_test)
 
-print(classification_report(y_test, y_pred_rf2))
-print(confusion_matrix(y_test, y_pred_rf2))
+# print(classification_report(y_test, y_pred_rf2))
+# print(confusion_matrix(y_test, y_pred_rf2))
 
 # %% [markdown]
 # Uit deze visualisatie blijkt dat het model rekening houdt met een veel meer variabelen uit de dataset. In plaats van slechts enkele kenmerken, worden meerdere factoren meegenomen die gezamenlijk bijdragen aan de classificatie of iemand wel of geen sepsis heeft.
@@ -606,8 +605,8 @@ print(confusion_matrix(y_test, y_pred_rf2))
 # rf2_tree_model.view(scale=2)
 
 # %%
-export_prediction_set(test_patient_ids, df, y_pred_rf2)
-print_utiltiy_score()
+# export_prediction_set(test_patient_ids, df, y_pred_rf2)
+# print_utiltiy_score()
 
 # %% [markdown]
 # ## Reflectie
@@ -653,7 +652,6 @@ def calculateVisitTime(data: pd.DataFrame) -> pd.Series:
 
     return df['visit_duration']
 
-
 # %% [markdown]
 # Omdat in de functie `get_train_test_data_by_patient` de `Patient_ID` wordt verwijderd, moeten de basisvoorbereidingen opnieuw worden uitgevoerd. Dit is noodzakelijk omdat `calculateVisitTime` wordt berekend op basis van zowel de `Patient_ID` als de `Hour`. `Patient_ID` is namelijk in de vorige cycle uit de `train`- en `test`-data verwijderd.
 
@@ -664,7 +662,6 @@ X_train, y_train, _, X_test, y_test, _ = get_train_test_data_by_patient(df, trai
 
 X_train['visit_duration'] = calculateVisitTime(X_train)
 X_test['visit_duration'] = calculateVisitTime(X_test)
-
 
 # %% [markdown]
 # ### Format Data
@@ -715,54 +712,54 @@ X_test = X_test.drop(columns=['visit_duration'])
 # ### Gradient boosting
 
 # %%
-from sklearn.ensemble import GradientBoostingClassifier
+# from sklearn.ensemble import GradientBoostingClassifier
 
-gb1_model = GradientBoostingClassifier(
-    n_estimators=100,
-    learning_rate=0.1,
-    max_depth=3,
-    random_state=42
-)
+# gb1_model = GradientBoostingClassifier(
+#     n_estimators=100,
+#     learning_rate=0.1,
+#     max_depth=3,
+#     random_state=42
+# )
 
-gb1_model.fit(X_train, y_train)
-
-# %%
-y_pred_gb1 = gb1_model.predict(X_test)
-
-print(classification_report(y_test, y_pred_gb1))
-print(confusion_matrix(y_test, y_pred_gb1))
+# gb1_model.fit(X_train, y_train)
 
 # %%
-export_prediction_set(test_patient_ids, df, y_pred_gb1)
-print_utiltiy_score()
+# y_pred_gb1 = gb1_model.predict(X_test)
+
+# print(classification_report(y_test, y_pred_gb1))
+# print(confusion_matrix(y_test, y_pred_gb1))
+
+# %%
+# export_prediction_set(test_patient_ids, df, y_pred_gb1)
+# print_utiltiy_score()
 
 # %% [markdown]
 # ### Xgboost
 
 # %%
-from xgboost import XGBClassifier
+# from xgboost import XGBClassifier
 
-xgb1_model = XGBClassifier(
-    n_estimators=200,
-    learning_rate=0.05,
-    max_depth=4,
-    subsample=0.8,
-    colsample_bytree=0.8,
-    random_state=42,
-    eval_metric='logloss'
-)
+# xgb1_model = XGBClassifier(
+#     n_estimators=200,
+#     learning_rate=0.05,
+#     max_depth=4,
+#     subsample=0.8,
+#     colsample_bytree=0.8,
+#     random_state=42,
+#     eval_metric='logloss'
+# )
 
-xgb1_model.fit(X_train, y_train)
-
-# %%
-y_pred_xgb1 = xgb1_model.predict(X_test)
-
-print(classification_report(y_test, y_pred_xgb1))
-print(confusion_matrix(y_test, y_pred_xgb1))
+# xgb1_model.fit(X_train, y_train)
 
 # %%
-export_prediction_set(test_patient_ids, df, y_pred_xgb1)
-print_utiltiy_score()
+# y_pred_xgb1 = xgb1_model.predict(X_test)
+
+# print(classification_report(y_test, y_pred_xgb1))
+# print(confusion_matrix(y_test, y_pred_xgb1))
+
+# %%
+# export_prediction_set(test_patient_ids, df, y_pred_xgb1)
+# print_utiltiy_score()
 
 # %% [markdown]
 # ## Reflectie
@@ -793,8 +790,8 @@ def prep_dataset(data: pd.DataFrame) -> pd.DataFrame:
     return df
 
 # %%
-df = read_dataset()
-df = prep_dataset(df)
+# df = read_dataset()
+# df = prep_dataset(df)
 
 # %% [markdown]
 # ## Data preperation
@@ -806,18 +803,15 @@ df = prep_dataset(df)
 # %%
 from scepsis_prediction.feature_engineering import add_all_features
 
-df = add_all_features(df, include_rolling=True, include_temporal=True)
+# df = add_all_features(df, include_rolling=True, include_temporal=True)
 
-df = df.ffill().bfill()
-
-# %%
-print(df.isnull().sum())
+# df = df.ffill().bfill()
 
 # %% [markdown]
 # ### Format Data
 
 # %%
-X_train, y_train, train_patient_ids, X_test, y_test, test_patient_ids = get_train_test_data_by_patient(df, train_patients, test_patients, delete_patient_ids=True)
+# X_train, y_train, train_patient_ids, X_test, y_test, test_patient_ids = get_train_test_data_by_patient(df, train_patients, test_patients, delete_patient_ids=True)
 
 # %% [markdown]
 # ## Modeling
@@ -825,21 +819,21 @@ X_train, y_train, train_patient_ids, X_test, y_test, test_patient_ids = get_trai
 # ### Random forest
 
 # %%
-rf5_model = RandomForestClassifier(
-    n_estimators=100,        
-    max_depth=3,           
-    class_weight='balanced', 
-    random_state=42,
-    n_jobs=-1                
-)
+# rf5_model = RandomForestClassifier(
+#     n_estimators=100,        
+#     max_depth=3,           
+#     class_weight='balanced', 
+#     random_state=42,
+#     n_jobs=-1                
+# )
 
-rf5_model.fit(X_train, y_train)
+# rf5_model.fit(X_train, y_train)
 
 # %%
-y_pred_rf5 = rf5_model.predict(X_test)
+# y_pred_rf5 = rf5_model.predict(X_test)
 
-print(classification_report(y_test, y_pred_rf5))
-print(confusion_matrix(y_test, y_pred_rf5))
+# print(classification_report(y_test, y_pred_rf5))
+# print(confusion_matrix(y_test, y_pred_rf5))
 
 # %%
 # rf2_tree = rf2_model.estimators_[0]
@@ -856,57 +850,57 @@ print(confusion_matrix(y_test, y_pred_rf5))
 # rf2_tree_model.view(scale=2)
 
 # %%
-export_prediction_set(test_patient_ids, df, y_pred_rf5)
-print_utiltiy_score()
+# export_prediction_set(test_patient_ids, df, y_pred_rf5)
+# print_utiltiy_score()
 
 # %% [markdown]
 # ### Gradient boosting
 
 # %%
-gb5_model = GradientBoostingClassifier(
-    n_estimators=100,
-    learning_rate=0.1,
-    max_depth=3,
-    random_state=42
-)
+# gb5_model = GradientBoostingClassifier(
+#     n_estimators=100,
+#     learning_rate=0.1,
+#     max_depth=3,
+#     random_state=42
+# )
 
-gb5_model.fit(X_train, y_train)
-
-# %%
-y_pred_gb5 = gb5_model.predict(X_test)
-
-print(classification_report(y_test, y_pred_gb5))
-print(confusion_matrix(y_test, y_pred_gb5))
+# gb5_model.fit(X_train, y_train)
 
 # %%
-export_prediction_set(test_patient_ids, df, y_pred_gb5)
-print_utiltiy_score()
+# y_pred_gb5 = gb5_model.predict(X_test)
+
+# print(classification_report(y_test, y_pred_gb5))
+# print(confusion_matrix(y_test, y_pred_gb5))
+
+# %%
+# export_prediction_set(test_patient_ids, df, y_pred_gb5)
+# print_utiltiy_score()
 
 # %% [markdown]
 # ### Xgboost
 
 # %%
-xgb5_model = XGBClassifier(
-    n_estimators=200,
-    learning_rate=0.05,
-    max_depth=4,
-    subsample=0.8,
-    colsample_bytree=0.8,
-    random_state=42,
-    eval_metric='logloss'
-)
+# xgb5_model = XGBClassifier(
+#     n_estimators=200,
+#     learning_rate=0.05,
+#     max_depth=4,
+#     subsample=0.8,
+#     colsample_bytree=0.8,
+#     random_state=42,
+#     eval_metric='logloss'
+# )
 
-xgb5_model.fit(X_train, y_train)
-
-# %%
-y_pred_xgb5 = xgb5_model.predict(X_test)
-
-print(classification_report(y_test, y_pred_xgb5))
-print(confusion_matrix(y_test, y_pred_xgb5))
+# xgb5_model.fit(X_train, y_train)
 
 # %%
-export_prediction_set(test_patient_ids, df, y_pred_xgb5)
-print_utiltiy_score()
+# y_pred_xgb5 = xgb5_model.predict(X_test)
+
+# print(classification_report(y_test, y_pred_xgb5))
+# print(confusion_matrix(y_test, y_pred_xgb5))
+
+# %%
+# export_prediction_set(test_patient_ids, df, y_pred_xgb5)
+# print_utiltiy_score()
 
 # %% [markdown]
 # ## Reflectie
@@ -919,15 +913,15 @@ print_utiltiy_score()
 
 # %%
 import optuna
-
+from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
+from catboost import CatBoostClassifier
 from sklearn.metrics import (
     f1_score,
     precision_score,
     recall_score,
     roc_auc_score,
 )
-
-from lightgbm import LGBMClassifier
 
 FEATURE_CONFIGS = {
     "all": {
@@ -949,26 +943,67 @@ FEATURE_CONFIGS = {
 }
 
 def create_model(trial, model_name):
-    if model_name == "gbm":
-
+    if model_name == "xgb":
         params = {
-            "n_estimators": trial.suggest_int("n_estimators", 50, 500),
-            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3),
-            "max_depth": trial.suggest_int("max_depth", 2, 8),
-            "subsample": trial.suggest_float("subsample", 0.5, 1.0),
-            "random_state": 42,
-        }
+            "n_estimators": trial.suggest_int(
+                "n_estimators",
+                200,
+                1500,
+            ),
 
-        model = GradientBoostingClassifier(**params)
+            "learning_rate": trial.suggest_float(
+                "learning_rate",
+                0.005,
+                0.2,
+                log=True,
+            ),
 
-    elif model_name == "xgb":
-        params = {
-            "n_estimators": trial.suggest_int("n_estimators", 100, 1000),
-            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3),
-            "max_depth": trial.suggest_int("max_depth", 3, 12),
-            "subsample": trial.suggest_float("subsample", 0.5, 1.0),
-            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
-            "min_child_weight": trial.suggest_int("min_child_weight", 1, 10),
+            "max_depth": trial.suggest_int(
+                "max_depth",
+                3,
+                12,
+            ),
+
+            "subsample": trial.suggest_float(
+                "subsample",
+                0.5,
+                1.0,
+            ),
+
+            "colsample_bytree": trial.suggest_float(
+                "colsample_bytree",
+                0.5,
+                1.0,
+            ),
+
+            "min_child_weight": trial.suggest_int(
+                "min_child_weight",
+                1,
+                10,
+            ),
+
+            "gamma": trial.suggest_float(
+                "gamma",
+                0.0,
+                5.0,
+            ),
+
+            "reg_alpha": trial.suggest_float(
+                "reg_alpha",
+                0.0,
+                5.0,
+            ),
+
+            "reg_lambda": trial.suggest_float(
+                "reg_lambda",
+                0.0,
+                5.0,
+            ),
+
+            # GPU
+            "tree_method": "hist",
+            "device": "cuda",
+
             "random_state": 42,
             "eval_metric": "logloss",
             "verbosity": 0,
@@ -978,17 +1013,114 @@ def create_model(trial, model_name):
 
     elif model_name == "lgbm":
         params = {
-            "n_estimators": trial.suggest_int("n_estimators", 100, 1000),
-            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3),
-            "max_depth": trial.suggest_int("max_depth", 3, 12),
-            "num_leaves": trial.suggest_int("num_leaves", 15, 255),
-            "subsample": trial.suggest_float("subsample", 0.5, 1.0),
-            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
+            "n_estimators": trial.suggest_int(
+                "n_estimators",
+                200,
+                1500,
+            ),
+
+            "learning_rate": trial.suggest_float(
+                "learning_rate",
+                0.005,
+                0.2,
+                log=True,
+            ),
+
+            "max_depth": trial.suggest_int(
+                "max_depth",
+                3,
+                12,
+            ),
+
+            "num_leaves": trial.suggest_int(
+                "num_leaves",
+                15,
+                255,
+            ),
+
+            "subsample": trial.suggest_float(
+                "subsample",
+                0.5,
+                1.0,
+            ),
+
+            "colsample_bytree": trial.suggest_float(
+                "colsample_bytree",
+                0.5,
+                1.0,
+            ),
+
+            "min_child_samples": trial.suggest_int(
+                "min_child_samples",
+                5,
+                100,
+            ),
+
+            "reg_alpha": trial.suggest_float(
+                "reg_alpha",
+                0.0,
+                5.0,
+            ),
+
+            "reg_lambda": trial.suggest_float(
+                "reg_lambda",
+                0.0,
+                5.0,
+            ),
             "random_state": 42,
             "verbosity": -1,
         }
 
         model = LGBMClassifier(**params)
+
+    elif model_name == "catboost":
+        params = {
+            "iterations": trial.suggest_int(
+                "iterations",
+                200,
+                1500,
+            ),
+
+            "learning_rate": trial.suggest_float(
+                "learning_rate",
+                0.005,
+                0.2,
+                log=True,
+            ),
+
+            "depth": trial.suggest_int(
+                "depth",
+                4,
+                12,
+            ),
+
+            "l2_leaf_reg": trial.suggest_float(
+                "l2_leaf_reg",
+                1.0,
+                10.0,
+            ),
+
+            "random_strength": trial.suggest_float(
+                "random_strength",
+                0.0,
+                5.0,
+            ),
+
+            "bagging_temperature": trial.suggest_float(
+                "bagging_temperature",
+                0.0,
+                5.0,
+            ),
+
+            # GPU
+            "task_type": "GPU",
+            "devices": "0",
+
+            "random_state": 42,
+            "verbose": 0,
+        }
+
+        model = CatBoostClassifier(**params)
 
     else:
         raise ValueError(f"Unknown model: {model_name}")
@@ -1003,31 +1135,62 @@ def objective(
     y_test,
     model_name,
 ):
-    threshold = trial.suggest_float("threshold", 0.05, 0.95)
+    threshold = trial.suggest_float(
+        "threshold",
+        0.05,
+        0.95,
+    )
 
-    model = create_model(trial, model_name)
-    model.fit(X_train, y_train)
+    model = create_model(
+        trial,
+        model_name,
+    )
+
+    if model_name == "catboost":
+        model.fit(
+            X_train,
+            y_train,
+            eval_set=(X_test, y_test),
+            use_best_model=True,
+        )
+
+    else:
+        model.fit(
+            X_train,
+            y_train,
+        )
 
     proba = model.predict_proba(X_test)[:, 1]
-    preds = (proba >= threshold).astype(int)
 
-    score = f1_score(y_test, preds)
+    preds = (
+        proba >= threshold
+    ).astype(int)
+
+    score = f1_score(
+        y_test,
+        preds,
+    )
+
+    trial.report(score, step=0)
+
+    if trial.should_prune():
+        raise optuna.TrialPruned()
 
     return score
-
 
 def run_all_experiments(
     train_patients,
     test_patients,
-    n_trials=50,
+    n_trials=100,
+    n_jobs=1
 ):
 
     all_results = []
 
     model_names = [
-        "gbm",
         "xgb",
         "lgbm",
+        "catboost",
     ]
 
     for feature_set_name, feature_kwargs in FEATURE_CONFIGS.items():
@@ -1038,13 +1201,13 @@ def run_all_experiments(
 
         df = read_dataset()
         df = prep_dataset(df)
-
         df = add_all_features(
             df,
             **feature_kwargs,
         )
 
-        df = df.ffill().bfill()
+        df = df.ffill()
+        df = df.dropna()
 
         (
             X_train,
@@ -1068,12 +1231,21 @@ def run_all_experiments(
 
         for model_name in model_names:
 
-            print("\n" + "-" * 50)
-            print(f"Running model: {model_name}")
-            print("-" * 50)
+            print("\n" + "-" * 60)
+            print(f"RUNNING MODEL: {model_name}")
+            print("-" * 60)
 
             study = optuna.create_study(
                 direction="maximize",
+
+                pruner=optuna.pruners.MedianPruner(
+                    n_startup_trials=10,
+                    n_warmup_steps=5,
+                ),
+
+                sampler=optuna.samplers.TPESampler(
+                    seed=42,
+                ),
             )
 
             study.optimize(
@@ -1085,27 +1257,53 @@ def run_all_experiments(
                     y_test,
                     model_name,
                 ),
+
                 n_trials=n_trials,
+
+                # parallel CPU workers
+                n_jobs=n_jobs,
+
                 show_progress_bar=True,
             )
 
             best_params = study.best_params
-            best_threshold = best_params.pop("threshold")
+
+            best_threshold = best_params.pop(
+                "threshold"
+            )
 
             final_model = create_model(
                 optuna.trial.FixedTrial(best_params),
                 model_name,
             )
 
-            final_model.fit(X_train, y_train)
+            if model_name == "catboost":
+                final_model.fit(
+                    X_train,
+                    y_train,
+                    eval_set=(X_test, y_test),
+                    use_best_model=True,
+                )
 
-            final_proba = final_model.predict_proba(X_test)[:, 1]
+            else:
+                final_model.fit(
+                    X_train,
+                    y_train,
+                )
+
+
+            final_proba = final_model.predict_proba(
+                X_test
+            )[:, 1]
 
             final_preds = (
                 final_proba >= best_threshold
             ).astype(int)
 
-            final_f1 = f1_score(y_test, final_preds)
+            final_f1 = f1_score(
+                y_test,
+                final_preds,
+            )
 
             final_precision = precision_score(
                 y_test,
@@ -1127,11 +1325,14 @@ def run_all_experiments(
             result = {
                 "feature_set": feature_set_name,
                 "model": model_name,
+
                 "f1": final_f1,
                 "precision": final_precision,
                 "recall": final_recall,
                 "roc_auc": final_auc,
+
                 "threshold": best_threshold,
+
                 "best_params": best_params,
             }
 
@@ -1151,9 +1352,9 @@ def run_all_experiments(
 
 # %%
 results = run_all_experiments(
-    df=df,
-    target_column="target",
-    n_trials=100,
+    train_patients=train_patients,
+    test_patients=test_patients,
+    n_trials=50,
 )
 
 print(results)
