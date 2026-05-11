@@ -5,6 +5,8 @@ sys.path.append(os.path.abspath("../../src"))
 import optuna
 import pandas as pd
 import numpy as np
+import joblib
+from pathlib import Path
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 from catboost import CatBoostClassifier
@@ -17,25 +19,6 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
-
-FEATURE_CONFIGS = {
-    "all": {
-        "include_rolling": True,
-        "include_temporal": True,
-    },
-    "temporal_only": {
-        "include_rolling": False,
-        "include_temporal": True,
-    },
-    "rolling_only": {
-        "include_rolling": True,
-        "include_temporal": False,
-    },
-    "base": {
-        "include_rolling": False,
-        "include_temporal": False,
-    },
-}
 
 def export_prediction_set(test_patient_ids, df_original, y_pred):
     test_df = df_original[df_original['Patient_ID'].isin(test_patient_ids)].copy()
@@ -330,6 +313,7 @@ def objective(
     y_train,
     X_test,
     y_test,
+    test_patient_ids,
     model_name,
 ):
     threshold = trial.suggest_float(
@@ -363,9 +347,32 @@ def objective(
         proba >= threshold
     ).astype(int)
 
-    score = f1_score(
-        y_test,
-        preds,
+    temp_true = pd.DataFrame({
+        "Patient_ID": test_patient_ids,
+        "SepsisLabel": y_test.values,
+    })
+
+    temp_pred = pd.DataFrame({
+        "Patient_ID": test_patient_ids,
+        "SepsisLabel": preds,
+    })
+
+    temp_true_path = "temp_true.csv"
+    temp_pred_path = "temp_pred.csv"
+
+    temp_true.to_csv(
+        temp_true_path,
+        index=False,
+    )
+
+    temp_pred.to_csv(
+        temp_pred_path,
+        index=False,
+    )
+
+    score = evaluate_sepsis_score(
+        temp_true_path,
+        temp_pred_path,
     )
 
     trial.report(score, step=0)
@@ -378,19 +385,15 @@ def objective(
 def run_all_experiments(
     train_patients,
     test_patients,
+    model_names_run,
+    feature_configs_run,
     n_trials=100,
     n_jobs=1
 ):
 
     all_results = []
 
-    model_names = [
-        "xgb",
-        "lgbm",
-        "catboost",
-    ]
-
-    for feature_set_name, feature_kwargs in FEATURE_CONFIGS.items():
+    for feature_set_name, feature_kwargs in feature_configs_run.items():
 
         print("\n" + "=" * 80)
         print(f"FEATURE SET: {feature_set_name}")
@@ -426,13 +429,22 @@ def run_all_experiments(
         print(f"Train positives: {y_train.sum()}")
         print(f"Test positives: {y_test.sum()}")
 
-        for model_name in model_names:
+        for model_name in model_names_run:
 
             print("\n" + "-" * 60)
             print(f"RUNNING MODEL: {model_name}")
             print("-" * 60)
 
+            study_name = get_study_name(
+                feature_set_name,
+                model_name,
+            )
+
             study = optuna.create_study(
+                study_name=study_name,
+                storage=f"sqlite:///{OPTUNA_DB}",
+                load_if_exists=True,
+
                 direction="maximize",
 
                 pruner=optuna.pruners.MedianPruner(
@@ -444,24 +456,29 @@ def run_all_experiments(
                     seed=42,
                 ),
             )
+            
+            try:
+                study.optimize(
+                    lambda trial: objective(
+                        trial,
+                        X_train,
+                        y_train,
+                        X_test,
+                        y_test,
+                        test_patient_ids,
+                        model_name,
+                    ),
 
-            study.optimize(
-                lambda trial: objective(
-                    trial,
-                    X_train,
-                    y_train,
-                    X_test,
-                    y_test,
-                    model_name,
-                ),
+                    n_trials=n_trials,
 
-                n_trials=n_trials,
+                    # parallel CPU workers
+                    n_jobs=n_jobs,
 
-                # parallel CPU workers
-                n_jobs=n_jobs,
-
-                show_progress_bar=True,
-            )
+                    show_progress_bar=True,
+                )
+            except Exception as e:
+                print(f"ERROR IN {study_name}: {e}")
+                continue  
 
             best_params = study.best_params
 
@@ -535,6 +552,26 @@ def run_all_experiments(
 
             all_results.append(result)
 
+            results_df_temp = pd.DataFrame(all_results)
+            results_df_temp.to_csv(
+                RESULTS_CSV,
+                index=False,
+            )
+
+
+            model_path = (
+                MODELS_DIR /
+                f"{feature_set_name}_{model_name}.pkl"
+            )
+
+            joblib.dump(
+                {
+                    "model": final_model,
+                    "threshold": best_threshold,
+                    "params": best_params,
+                },
+                model_path,
+            )
             print("\nBEST RESULT")
             print(result)
 
@@ -547,6 +584,60 @@ def run_all_experiments(
 
     return results_df
 
+def get_study_name(feature_set_name, model_name):
+    return f"{feature_set_name}_{model_name}"
+
+FEATURE_CONFIGS = {
+    "all": {
+        "include_rolling": True,
+        "include_temporal": True,
+    },
+    "temporal_only": {
+        "include_rolling": False,
+        "include_temporal": True,
+    },
+    "rolling_only": {
+        "include_rolling": True,
+        "include_temporal": False,
+    },
+    "base": {
+        "include_rolling": False,
+        "include_temporal": False,
+    },
+}
+
+model_names_first_test = [
+    "xgb",
+    "lgbm",
+    "catboost",
+]
+
+model_names_second_test = [
+    "lgbm",
+    "catboost",
+]
+
+FEATURE_CONFIG_SECOND_RUN = {
+    "all": {
+        "include_rolling": True,
+        "include_temporal": True,
+    },
+    "rolling_only": {
+        "include_rolling": True,
+        "include_temporal": False,
+    }
+}
+
+
+BASE_DIR = Path("./optuna_storage")
+BASE_DIR.mkdir(exist_ok=True)
+
+OPTUNA_DB = BASE_DIR / "sepsis_optuna.db"
+RESULTS_CSV = BASE_DIR / "results.csv"
+MODELS_DIR = BASE_DIR / "saved_models"
+
+MODELS_DIR.mkdir(exist_ok=True)
+
 if __name__ == "__main__":
     df = read_dataset()
 
@@ -555,7 +646,10 @@ if __name__ == "__main__":
     results = run_all_experiments(
         train_patients=train_patients,
         test_patients=test_patients,
-        n_trials=50,
+        model_names_run=model_names_second_test,
+        feature_configs_run=FEATURE_CONFIG_SECOND_RUN,
+        n_trials=20,
     )
 
+    results.to_csv('all_result', sep=',') 
     print(results)

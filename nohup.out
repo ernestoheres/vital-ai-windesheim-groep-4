@@ -661,3 +661,25 @@ xdg-open: no method available for opening 'file:///root/.local/share/jupyter/run
 [I 2026-05-09 22:19:42.538 ServerApp] Use Control-C to stop this server and shut down all kernels (twice to skip confirmation).
 [W 2026-05-09 22:19:42.541 ServerApp] No web browser found: Error('could not locate runnable browser').
 [I 2026-05-09 22:19:42.562 ServerApp] Skipped non-installed server(s): basedpyright, bash-language-server, dockerfile-language-server-nodejs, javascript-typescript-langserver, jedi-language-server, julia-language-server, pyrefly, pyright, python-language-server, python-lsp-server, r-languageserver, sql-language-server, texlab, typescript-language-server, unified-language-server, vscode-css-languageserver-bin, vscode-html-languageserver-bin, vscode-json-languageserver-bin, yaml-language-server
+[I 2026-05-10 17:07:00.640 ServerApp] jupyter_lsp | extension was successfully linked.
+[I 2026-05-10 17:07:00.645 ServerApp] jupyter_server_terminals | extension was successfully linked.
+[W 2026-05-10 17:07:00.648 LabApp] 'token' has moved from NotebookApp to ServerApp. This config will be passed to ServerApp. Be sure to update your config before our next release.
+[W 2026-05-10 17:07:00.652 ServerApp] ServerApp.token config is deprecated in 2.0. Use IdentityProvider.token.
+[I 2026-05-10 17:07:00.652 ServerApp] jupyterlab | extension was successfully linked.
+[I 2026-05-10 17:07:00.656 ServerApp] notebook | extension was successfully linked.
+[I 2026-05-10 17:07:01.086 ServerApp] notebook_shim | extension was successfully linked.
+[I 2026-05-10 17:07:01.110 ServerApp] notebook_shim | extension was successfully loaded.
+[I 2026-05-10 17:07:01.114 ServerApp] jupyter_lsp | extension was successfully loaded.
+[I 2026-05-10 17:07:01.115 ServerApp] jupyter_server_terminals | extension was successfully loaded.
+[I 2026-05-10 17:07:01.117 LabApp] JupyterLab extension loaded from /usr/local/lib/python3.12/dist-packages/jupyterlab
+[I 2026-05-10 17:07:01.118 LabApp] JupyterLab application directory is /usr/local/share/jupyter/lab
+[I 2026-05-10 17:07:01.118 LabApp] Extension Manager is 'pypi'.
+[I 2026-05-10 17:07:01.169 ServerApp] jupyterlab | extension was successfully loaded.
+[I 2026-05-10 17:07:01.173 ServerApp] notebook | extension was successfully loaded.
+[I 2026-05-10 17:07:01.174 ServerApp] Serving notebooks from local directory: /workspaces/vital-ai-windesheim-groep-4
+[I 2026-05-10 17:07:01.174 ServerApp] Jupyter Server 2.18.2 is running at:
+[I 2026-05-10 17:07:01.174 ServerApp] http://427af489ae58:8888/tree?token=...
+[I 2026-05-10 17:07:01.174 ServerApp]     http://127.0.0.1:8888/tree?token=...
+[I 2026-05-10 17:07:01.174 ServerApp] Use Control-C to stop this server and shut down all kernels (twice to skip confirmation).
+[W 2026-05-10 17:07:01.178 ServerApp] No web browser found: Error('could not locate runnable browser').
+[I 2026-05-10 17:07:01.199 ServerApp] Skipped non-installed server(s): basedpyright, bash-language-server, dockerfile-language-server-nodejs, javascript-typescript-langserver, jedi-language-server, julia-language-server, pyrefly, pyright, python-language-server, python-lsp-server, r-languageserver, sql-language-server, texlab, typescript-language-server, unified-language-server, vscode-css-languageserver-bin, vscode-html-languageserver-bin, vscode-json-languageserver-bin, yaml-language-server
