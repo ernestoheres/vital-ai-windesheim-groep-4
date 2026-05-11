@@ -75,6 +75,9 @@ class SofaCalculator:
         spo2_col = self.__get_spo2_column(df)
         df["SF_ratio"] = df[spo2_col] / df["FiO2"]
 
+        # Fix numpy inf waardes met de SF_ratio kolom
+        df['SF_ratio'] = df['SF_ratio'].replace([np.inf, -np.inf], np.NaN)
+
         df["sofa_resp"] = df["SF_ratio"].apply(self.__resp_score)
         df["sofa_coag"] = df["Platelets"].apply(self.__coag_score)
         df["sofa_liver"] = df["Bilirubin_total"].apply(self.__liver_score)

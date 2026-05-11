@@ -25,7 +25,7 @@ Gebruik:
     # ... etc.
 """
 
-from scepsis_prediction.SofaCalculator import SofaCalculator
+from scepsis_prediction.sofa_calculator import SofaCalculator
 import pandas as pd
 import numpy as np
 
@@ -42,10 +42,8 @@ def add_sofa_features(df: pd.DataFrame) -> pd.DataFrame:
         qSOFA_partial        — 0–2 (zonder GCS)
         SOFA_modified_total  — som van resp, coag, lever, cv, renaal
     """
-    df = SofaCalculator(df).calculate_all_values(True, True)
-    df['SF_ratio'] = df['SF_ratio'].replace([np.inf, -np.inf], np.NaN)
 
-    return df
+    return SofaCalculator(df).calculate_all_values(True, True)
 
 def add_hemodynamic_features(df: pd.DataFrame) -> pd.DataFrame:
     """

@@ -1,5 +1,0 @@
-Metadata-Version: 2.4
-Name: scepsis-prediction
-Version: 0.1.0
-Summary: Utilities for sepsis prediction notebooks
-Requires-Python: >=3.10
