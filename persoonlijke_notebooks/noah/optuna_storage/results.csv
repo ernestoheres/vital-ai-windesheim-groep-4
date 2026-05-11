@@ -1,0 +1,2 @@
+feature_set,model,f1,precision,recall,roc_auc,threshold,best_params
+all,lgbm,0.1370911621433542,0.1854990583804143,0.108719646799117,0.7905007921447016,0.11207233463110544,"{'n_estimators': 258, 'learning_rate': 0.00786400444110195, 'max_depth': 6, 'num_leaves': 46, 'subsample': 0.8068066127513043, 'colsample_bytree': 0.5591629211070356, 'min_child_samples': 68, 'reg_alpha': 4.251680055854106, 'reg_lambda': 4.433013387636901}"

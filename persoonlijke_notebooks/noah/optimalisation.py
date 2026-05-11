@@ -6,6 +6,7 @@ import optuna
 import pandas as pd
 import numpy as np
 import joblib
+from datetime import datetime
 from pathlib import Path
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
@@ -438,6 +439,7 @@ def run_all_experiments(
             study_name = get_study_name(
                 feature_set_name,
                 model_name,
+                n_trials
             )
 
             study = optuna.create_study(
@@ -584,8 +586,11 @@ def run_all_experiments(
 
     return results_df
 
-def get_study_name(feature_set_name, model_name):
-    return f"{feature_set_name}_{model_name}"
+def get_timestamp():
+    return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+def get_study_name(feature_set_name, model_name, trials):
+    return f"{feature_set_name}_{model_name}_{trials}_{get_timestamp()}"
 
 FEATURE_CONFIGS = {
     "all": {
@@ -648,8 +653,13 @@ if __name__ == "__main__":
         test_patients=test_patients,
         model_names_run=model_names_second_test,
         feature_configs_run=FEATURE_CONFIG_SECOND_RUN,
-        n_trials=20,
+        n_trials=80,
     )
 
-    results.to_csv('all_result', sep=',') 
     print(results)
+
+    try:
+        filename = f"all_result_{get_timestamp}"
+        results.to_csv(filename, sep=',', index=False) 
+    except Exception as e:
+        print(f'Error while saving: {e}')
