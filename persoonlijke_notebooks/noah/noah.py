@@ -62,9 +62,10 @@ import pandas as pd
 import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
+from helpers.notebook_helpers import read_dataset
 
-def read_dataset() -> pd.DataFrame:
-    return pd.read_csv('../../data/train_data.csv', sep=',')
+# def read_dataset() -> pd.DataFrame:
+#     return pd.read_csv('../../data/train_data.csv', sep=',')
 
 df = read_dataset()
 
@@ -183,14 +184,14 @@ df = df.fillna(0)
 # De enige aanvullende kolommen die nodig zijn, worden berekend en toegevoegd aan de dataset door de `SofaCalculator`. De twee functieaanroepen van de `SofaCalculator` gebruiken vervolgens de gedeeltelijke SOFA-scores om te bepalen of een patiënt wel of geen sepsis heeft.
 
 # %%
-from scepsis_prediction.SofaCalculator import SofaCalculator
+# from scepsis_prediction.SofaCalculator import SofaCalculator
 
-sofa_calc = SofaCalculator(df)
+# sofa_calc = SofaCalculator(df)
 
-df = sofa_calc.calculate_all_values()
-#df['SepsisLabel'] = sofa_calc.hasSepsis()
+# df = sofa_calc.calculate_all_values()
+# #df['SepsisLabel'] = sofa_calc.hasSepsis()
 
-df.info()
+# df.info()
 
 # %% [markdown]
 # Hieronder wordt berekend welk percentage van de dataset sepsis heeft en welk percentage niet. Daarbij wordt geen rekening gehouden met het feit dat wanneer bij een patiënt eenmaal sepsis is vastgesteld, deze in de daaropvolgende uren ook sepsis heeft. De berekening gebeurt dus per afzonderlijke rij in de dataset.
@@ -335,16 +336,16 @@ X_train, X_test, y_train, y_test = train_test_split(
 # Hier worden eerst de kolommen verwijders om ze opnieuw te berekenen.
 
 # %%
-df = df.drop(columns=['qSOFA_partial', 'SOFA_modified_total'])
+# df = df.drop(columns=['qSOFA_partial', 'SOFA_modified_total'])
 
 # %% [markdown]
 # Hieronder worden de herberekeningen van deze waarden weergegeven. Dit keer worden de extra kolommen die nodig zijn voor de berekeningen wel in de dataset opgenomen. Daarnaast wordt het `sepsislabel` opnieuw toegevoegd aan de dataset.
 
 # %%
-sofa_calc = SofaCalculator(df)
+# sofa_calc = SofaCalculator(df)
 
-df = sofa_calc.calculate_all_values(True, True)
-#df['SepsisLabel'] = sofa_calc.hasSepsis()
+# df = sofa_calc.calculate_all_values(True, True)
+# #df['SepsisLabel'] = sofa_calc.hasSepsis()
 
 # %% [markdown]
 # Hier is te zien dat er enkele extra kolommen zijn toegevoegd waarmee de SOFA-scores worden berekend. Dit betreft de variabelen `qsofa_resp`, `qsofa_sbp`, `SF_ratio`, `sofa_resp`, `sofa_coag`, `sofa_liver`, `sofa_cv` en `sofa_renal`. Deze waarden vormen de basis voor de punten waaruit de SOFA-scores worden opgebouwd.
@@ -963,5 +964,40 @@ results_df.head(15)
 
 # %% [markdown]
 # 
+
+# %%
+from scepsis_prediction.feature_engineering import add_all_features
+from helpers.notebook_helpers import read_dataset, prep_dataset, get_train_test_data_by_patient, train_test_split_by_patient, get_train_test_data_by_patient
+
+df = read_dataset()
+df = prep_dataset(df)
+df = add_all_features(df=df, include_temporal=False, include_rolling=True)
+
+df = df.ffill()
+df = df.dropna()
+
+train_patients, test_patients = train_test_split_by_patient(df)
+_, _, _, X_test, _, test_patient_ids = get_train_test_data_by_patient(
+    df,
+    train_patients,
+    test_patients,
+    delete_patient_ids=True,
+)
+
+
+# %%
+import joblib
+
+loaded = joblib.load('optuna_storage/saved_models/rolling_only_xgb_10-05-2026.pkl')
+
+model = loaded["model"]
+threshold = loaded.get("threshold", 0.5)
+
+proba = model.predict_proba(X_test)[:, 1]
+y_pred = (proba >= threshold).astype(int)
+
+# %%
+export_prediction_set(test_patient_ids, df, y_pred)
+print_utiltiy_score()
 
 
