@@ -74,61 +74,109 @@
 
         # This script sets up our Python environment and project
         runScript = pkgs.writeShellScriptBin "run-script" ''
-          #!/usr/bin/env bash
+                    #!/usr/bin/env bash
           
-          # Activate the virtual environment
-          source .venv/bin/activate
+                    # Activate the virtual environment
+                    source .venv/bin/activate
 
-          # Create a fancy welcome message
-          REPO_NAME=$(basename "$PWD")
-          PROPER_REPO_NAME=$(echo "$REPO_NAME" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')
-          figlet "$PROPER_REPO_NAME"
-          echo "Welcome to the $PROPER_REPO_NAME development environment on ${system}!"
-          echo 
+                    # Create a fancy welcome message
+                    REPO_NAME=$(basename "$PWD")
+                    PROPER_REPO_NAME=$(echo "$REPO_NAME" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')
+                    figlet "$PROPER_REPO_NAME"
+                    echo "Welcome to the $PROPER_REPO_NAME development environment on ${system}!"
+                    echo 
 
-          # Install Python packages from requirements.txt using uv
-          # This allows flexibility to use the latest PyPI packages
-          # Note: This makes the environment less deterministic
-          echo "- Installing pip packages with uv..."
-          if uv pip install --upgrade pip --quiet && \
-            uv pip install -r requirements.txt --quiet; then
-              package_count=$(pip list --format=freeze | wc -l)
-              echo "- Done. $package_count pip packages installed."
-          else
-              echo "Warning: An error occurred during uv pip setup."
-          fi
+                    # Install Python packages from requirements.txt using uv
+                    # This allows flexibility to use the latest PyPI packages
+                    # Note: This makes the environment less deterministic
+                    echo "- Installing pip packages with uv..."
+                    if uv pip install --upgrade pip --quiet && \
+                      uv pip install -r requirements.txt --quiet; then
+                        package_count=$(pip list --format=freeze | wc -l)
+                        echo "- Done. $package_count pip packages installed."
+                    else
+                        echo "Warning: An error occurred during uv pip setup."
+                    fi
 
-          # Check if numpy is properly installed
-          if python -c "import numpy" 2>/dev/null; then
-            echo "- numpy is importable (good to go!)"
-            echo
-            echo "To start marimo, type: start"
-            echo "To stop marimo, type: stop"
-            echo
-          else
-            echo "Error: numpy could not be imported. Check your installation."
-          fi
+                    # Check if numpy is properly installed
+                    if python -c "import numpy" 2>/dev/null; then
+                      echo "- numpy is importable (good to go!)"
+                      echo
+                      echo "To start marimo, type: start"
+                      echo "To stop marimo, type: stop"
+                      echo
+                    else
+                      echo "Error: numpy could not be imported. Check your installation."
+                    fi
 
-          # Create convenience scripts for managing JupyterLab
-          # Note: We've disabled token and password for easier access, especially in WSL environments
-          cat << EOF > .venv/bin/start
-          #!/bin/sh
-          echo "A marimo tab will open in your default browser."
-          tmux kill-session -t marimo 2>/dev/null || echo "No tmux session named 'marimo' is running."
-          tmux new-session -d -s marimo 'source .venv/bin/activate && marimo edit --watch --port 4000'
-          echo "If no tab opens, visit http://localhost:4000"
-          echo "To view marimo server: tmux attach -t marimo"
-          echo "To stop marimo server: stop"
-          EOF
-          chmod +x .venv/bin/start
+                    # Create convenience scripts for managing JupyterLab
+                    # Note: We've disabled token and password for easier access, especially in WSL environments
+                    cat << EOF > .venv/bin/start
+                    #!/bin/sh
+                    echo "A marimo tab will open in your default browser."
+                    tmux kill-session -t marimo 2>/dev/null || echo "No tmux session named 'marimo' is running."
+                    tmux new-session -d -s marimo 'source .venv/bin/activate && export CUDA_HOME="${pkgs.cudatoolkit}" && export LD_LIBRARY_PATH="/run/opengl-driver/lib:$CUDA_HOME/lib:$LD_LIBRARY_PATH" && marimo edit --watch --port 4000'
+                    echo "If no tab opens, visit http://localhost:4000"
+                    echo "To view marimo server: tmux attach -t marimo"
+                    echo "To stop marimo server: stop"
+                    EOF
+                    chmod +x .venv/bin/start
 
-          cat << EOF > .venv/bin/stop
-          #!/bin/sh
-          echo "Stopping tmux session 'marimo'..."
-          tmux kill-session -t marimo 2>/dev/null || echo "No tmux session named 'marimo' is running."
-          echo "The tmux session 'marimo' has been stopped."
-          EOF
-          chmod +x .venv/bin/stop
+                    cat << EOF > .venv/bin/start-cuda
+                    #!/bin/sh
+                    export CUDA_HOME="${pkgs.cudatoolkit}"
+                    export LD_LIBRARY_PATH="/run/opengl-driver/lib:$CUDA_HOME/lib:$LD_LIBRARY_PATH"
+                    exec .venv/bin/start
+                    EOF
+                    chmod +x .venv/bin/start-cuda
+
+                    cat << EOF > .venv/bin/cuda-doctor
+                    #!/bin/sh
+                    export CUDA_HOME="${pkgs.cudatoolkit}"
+                    export LD_LIBRARY_PATH="/run/opengl-driver/lib:$CUDA_HOME/lib:$LD_LIBRARY_PATH"
+                    python - <<'PY'
+          import ctypes
+          import os
+
+          print('CUDA_HOME =', os.environ.get('CUDA_HOME'))
+          print('LD_LIBRARY_PATH =', os.environ.get('LD_LIBRARY_PATH'))
+
+          for lib in ('libcuda.so.1', 'libcudart.so.12'):
+              try:
+                  ctypes.CDLL(lib)
+                  print(lib, 'OK')
+              except OSError as exc:
+                  print(lib, 'FAIL', exc)
+
+          try:
+              cudart = ctypes.CDLL('libcudart.so.12')
+              get_count = cudart.cudaGetDeviceCount
+              get_count.argtypes = [ctypes.POINTER(ctypes.c_int)]
+              get_count.restype = ctypes.c_int
+              get_err = cudart.cudaGetErrorString
+              get_err.argtypes = [ctypes.c_int]
+              get_err.restype = ctypes.c_char_p
+              count = ctypes.c_int()
+              err = get_count(ctypes.byref(count))
+              msg = get_err(err).decode()
+              print('cudaGetDeviceCount err =', err)
+              print('cudaGetDeviceCount msg =', msg)
+              print('cudaGetDeviceCount count =', count.value)
+              if err == 999:
+                  print('Hint: CUDA runtime sees the driver but UVM may be broken; reloading nvidia_uvm or rebooting often fixes this on NixOS.')
+          except OSError as exc:
+              print('cuda runtime load failed:', exc)
+          PY
+                    EOF
+                    chmod +x .venv/bin/cuda-doctor
+
+                    cat << EOF > .venv/bin/stop
+                    #!/bin/sh
+                    echo "Stopping tmux session 'marimo'..."
+                    tmux kill-session -t marimo 2>/dev/null || echo "No tmux session named 'marimo' is running."
+                    echo "The tmux session 'marimo' has been stopped."
+                    EOF
+                    chmod +x .venv/bin/stop
         '';
 
         # Base shell hook that just sets up the environment without any output
@@ -162,7 +210,7 @@
           if command -v nvidia-smi &> /dev/null; then
             export CUDA_HOME=${pkgs.cudatoolkit}
             export PATH=$CUDA_HOME/bin:$PATH
-            export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+            export LD_LIBRARY_PATH=/run/opengl-driver/lib:$CUDA_HOME/lib:$LD_LIBRARY_PATH
           fi
         '';
 
