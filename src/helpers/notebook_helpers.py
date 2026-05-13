@@ -100,7 +100,7 @@ def get_train_test_data_by_patient(
 
     drop_cols = [
         'SepsisLabel', 
-        'Sepsis_Future',
+        # 'Sepsis_Future',
         *qsofa_features, 
         *sofa_features, 
         *unit_features
@@ -152,7 +152,7 @@ def prep_dataset(data: pd.DataFrame) -> pd.DataFrame:
     # Sepsis_Future correct instellen
     df = df.sort_values(['Patient_ID', 'Hour'])
 
-    df['Sepsis_Future'] = df.groupby('Patient_ID')['SepsisLabel'].shift(-6)
-    df = df.dropna(subset=['Sepsis_Future'])
+    # df['Sepsis_Future'] = df.groupby('Patient_ID')['SepsisLabel'].shift(-6)
+    # df = df.dropna(subset=['Sepsis_Future'])
     
     return df

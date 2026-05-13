@@ -106,6 +106,7 @@ def __select_best_model(
             df_copy,
             train_patients,
             test_patients,
+            y_target='SepsisLabel',
             delete_patient_ids=True,
         )
 
@@ -156,4 +157,4 @@ def return_best_model(
 
 
 if __name__ == "__main__":
-    model = return_best_model("optuna_storage/results_10-05-2026.csv", "optuna_storage/results_11-05-2026.csv", use_min_recall=True)
+    model = return_best_model("optuna_storage/results_10-05-2026.csv", "optuna_storage/results_11-05-2026.csv", use_min_recall=False)
