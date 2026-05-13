@@ -34,38 +34,11 @@ import os
 sys.path.append(os.path.abspath("../../src"))
 
 # %%
-def export_prediction_set(test_patient_ids, df_original, y_pred):
-    test_df = df_original[df_original['Patient_ID'].isin(test_patient_ids)].copy()
-    test_df = test_df.sort_values(['Patient_ID', 'Hour'])
-
-    # Ground truth
-    true_labels = test_df[['Patient_ID', 'SepsisLabel']]
-    true_labels.to_csv('testset (with label).csv', index=False)
-
-    # Predictions 
-    predictions = test_df[['Patient_ID']].copy()
-    predictions['SepsisLabel'] = y_pred
-    predictions.to_csv('predictions.csv', index=False)
-
-# %%
-from scepsis_prediction.evaluation import compute_prediction_utility, evaluate_sepsis_score
-
-def print_utiltiy_score(
-        testset: str = "testset (with label).csv",
-        predictions: str = "predictions.csv"
-) -> None:
-    utility = evaluate_sepsis_score(testset, predictions)
-    print(utility)
-
-# %%
 import pandas as pd
 import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
 from helpers.notebook_helpers import read_dataset
-
-# def read_dataset() -> pd.DataFrame:
-#     return pd.read_csv('../../data/train_data.csv', sep=',')
 
 df = read_dataset()
 
@@ -120,17 +93,6 @@ sns.countplot(x=df['Gender'])
 # In de eerdere visualisatie was al zichtbaar dat waarde 1 in de `Gender`-kolom vaker voorkomt dan waarde 0. Uit nieuwsgierigheid is vervolgens precies berekend hoe groot dit verschil is in procenten.
 
 # %%
-def getGenderPercentage(data: pd.DataFrame) -> None: 
-    genderLenght = len(data['Gender'])
-    gender_vals = data['Gender'].unique()
-
-    def calcPercentage(val: int) -> float:
-        return (val /genderLenght) * 100
-
-    for val in gender_vals:
-        count = (data['Gender'] == val).sum()
-        print(f'{val}: {calcPercentage(count):.2f}%')
-
 getGenderPercentage(df)
 
 # %% [markdown]
@@ -199,18 +161,6 @@ df = df.fillna(0)
 # Hiervoor is een helpermethode ontwikkeld, die ook op andere momenten in het notebook kan worden aangeroepen om de verdeling opnieuw te controleren na eventuele aanpassingen.
 
 # %%
-def get_sepsis_values(data: pd.DataFrame) -> None:
-    if 'SepsisLabel' not in data.columns:
-        raise ValueError("Kolom 'SepsisLabel' ontbreekt in de DataFrame")
-
-    counts = data['SepsisLabel'].value_counts().sort_index()
-    total = len(data)
-
-    print('Sepsis verdeling:')
-    for val, count in counts.items():
-        percentage = (count / total) * 100
-        print(f'{val}: aantal = {count}, percentage = {percentage:.2f}%')
-
 get_sepsis_values(df)
 
 # %% [markdown]
@@ -420,22 +370,6 @@ df = df.dropna(subset=['Sepsis_Future'])
 # 
 # De helperfunctie `train_test_split_by_patient` is ontwikkeld om de dataset op een consistente en correcte manier te splitsen. Het doel van deze functie is om herbruikbaarheid te waarborgen, zodat bij toekomstige iteraties of aanpassingen aan de data dezelfde logica eenvoudig opnieuw kan worden toegepast. Hierdoor wordt voorkomen dat identieke bewerkingen telkens opnieuw moeten worden uitgevoerd en dat dezelfde code herhaaldelijk herschreven moet worden.
 
-# %%
-def train_test_split_by_patient(
-    data: pd.DataFrame, 
-    group_col: str = 'Patient_ID', 
-    test_size=0.2, 
-    random_state=42
-):
-    df = data.copy()
-    patients = df[group_col].unique()
-
-    train_patients, test_patients = train_test_split(
-        patients, test_size=test_size, random_state=random_state
-    )
-
-    return train_patients, test_patients
-
 # %% [markdown]
 # Hieronder word het splitsen van de data daadwerkelijk gedaan op basis van de helperfunctie.
 
@@ -446,62 +380,6 @@ train_patients, test_patients = train_test_split_by_patient(df)
 # Hieronder worden de uiteindelijke `train`- en `test`-sets samengesteld. De gegevens worden gefilterd op basis van unieke `Patient_ID`s, zodat beide datasets uitsluitend uit verschillende patiënten bestaan en er geen overlap optreedt. Dit proces wordt uitgevoerd met behulp van de helperfunctie `get_train_test_data_by_patient`, waardoor dezelfde bewerkingen eenvoudig herhaald kunnen worden door het hele notebook.
 # 
 # Daarnaast worden in deze stap de invoervariabelen (`X`) en de doelvariabele (`y`) gescheiden voor zowel de train- als de testset.
-
-# %%
-TrainTestSplit = tuple[pd.DataFrame, pd.Series, np.array, pd.DataFrame, pd.Series, np.array]
-
-def get_train_test_data_by_patient(
-    data: pd.DataFrame,
-    train_patients: pd.DataFrame, 
-    test_patients: pd.DataFrame,
-    y_target: str = 'Sepsis_Future',
-    group_col: str = 'Patient_ID',
-    delete_patient_ids: bool = False
-) -> TrainTestSplit:
-    df = data.copy()
-
-    qsofa_features = [col for col in df.columns if 'qsofa' in col.lower()]
-
-    sofa_features = [
-        col for col in df.columns
-        if 'sofa' in col.lower() and col not in qsofa_features
-    ]
-
-    if 'SF_ratio' in df.columns:
-        sofa_features.append('SF_ratio')
-
-    unit_features = [col for col in df.columns if 'unit' in col.lower()]
-
-    drop_cols = [
-        'SepsisLabel', 
-        'Sepsis_Future',
-        *qsofa_features, 
-        *sofa_features, 
-        *unit_features
-    ]
-
-    train = train_patients.copy()
-    test = test_patients.copy()
-
-    train_df = df[df[group_col].isin(train)]
-    test_df = df[df[group_col].isin(test)]
-
-    X_train = train_df.drop(columns=drop_cols)
-    y_train = train_df[y_target].astype(int)
-
-    X_test = test_df.drop(columns=drop_cols)
-    y_test = test_df[y_target].astype(int)
-
-    # Patient_ID is nodig voor het bereken van de utility score, maar het model mag niet trainen hierop
-    # Daarom worden deze eruit gefilterd en daarna verwijderd uit de test sets
-    train_patient_ids = X_train['Patient_ID'].values
-    test_patient_ids = X_test['Patient_ID'].values
-
-    if delete_patient_ids:
-        X_train = X_train.drop(columns=['Patient_ID'])
-        X_test = X_test.drop(columns=['Patient_ID'])
-
-    return X_train, y_train, train_patient_ids, X_test, y_test, test_patient_ids
 
 # %% [markdown]
 # Hieronder worden de `train`- en `test`-sets opgehaald op basis van de huidige dataset. Voor deze voorspelling is `Patient_ID` overbodig en word deze daarom nog verwijderd.
@@ -638,21 +516,6 @@ X_train, y_train, train_patient_ids, X_test, y_test, test_patient_ids = get_trai
 # 
 # Deze functie geeft een `Series` terug oftewel een kolom. Dit omdat binnen de functie gefilterd word op bepaalde data. Daarom is het makkelijker om deze terug tegeven inplaats van een geheel `DataFrame`.
 
-# %%
-def calculateVisitTime(data: pd.DataFrame) -> pd.Series:
-    df = data.copy()
-    df = df[['Patient_ID', 'Hour']].sort_values(['Patient_ID', 'Hour'])
-
-    visit_duration = (
-        df.groupby(['Patient_ID'])['Hour']
-        .max()
-        .add(1)
-    )
-
-    df['visit_duration'] = df.set_index(['Patient_ID']).index.map(visit_duration)
-
-    return df['visit_duration']
-
 # %% [markdown]
 # Omdat in de functie `get_train_test_data_by_patient` de `Patient_ID` wordt verwijderd, moeten de basisvoorbereidingen opnieuw worden uitgevoerd. Dit is noodzakelijk omdat `calculateVisitTime` wordt berekend op basis van zowel de `Patient_ID` als de `Hour`. `Patient_ID` is namelijk in de vorige cycle uit de `train`- en `test`-data verwijderd.
 
@@ -774,21 +637,6 @@ X_test = X_test.drop(columns=['visit_duration'])
 # 
 # ## Voorbereiding
 # Hier word eerst de data opnieuw ingelezen en wat andere simpele stappen die in voorgaande cycles ook is uitgevoerd.
-
-# %%
-def prep_dataset(data: pd.DataFrame) -> pd.DataFrame:
-    df = data.copy()
-
-    # Onnodige kolommen verwijderen
-    df = df.drop(columns=['Unnamed: 0'])
-
-    # Sepsis_Future correct instellen
-    df = df.sort_values(['Patient_ID', 'Hour'])
-
-    df['Sepsis_Future'] = df.groupby('Patient_ID')['SepsisLabel'].shift(-6)
-    df = df.dropna(subset=['Sepsis_Future'])
-    
-    return df
 
 # %%
 # df = read_dataset()
@@ -966,11 +814,22 @@ results_df.head(15)
 # 
 
 # %%
-from scepsis_prediction.feature_engineering import add_all_features
-from helpers.notebook_helpers import read_dataset, prep_dataset, get_train_test_data_by_patient, train_test_split_by_patient, get_train_test_data_by_patient
+import joblib
 
+from scepsis_prediction.feature_engineering import add_all_features
+from helpers.notebook_helpers import (
+    read_dataset, 
+    prep_dataset, 
+    get_train_test_data_by_patient, 
+    train_test_split_by_patient, 
+    get_train_test_data_by_patient,
+    export_prediction_set,
+    print_utiltiy_score
+)
+
+# %%
 df = read_dataset()
-df = prep_dataset(df)
+df = prep_dataset(df, add_sepsis_future=True)
 df = add_all_features(df=df, include_temporal=False, include_rolling=True)
 
 df = df.ffill()
@@ -985,12 +844,66 @@ _, _, _, X_test, _, test_patient_ids = get_train_test_data_by_patient(
 )
 
 
-# %%
-import joblib
+# %% [markdown]
+# VERSIE 1 met sepsis_future
 
+# %%
 loaded = joblib.load('optuna_storage/saved_models/rolling_only_xgb_10-05-2026.pkl')
 
 model = loaded["model"]
+threshold = loaded.get("threshold", 0.5)
+
+proba = model.predict_proba(X_test)[:, 1]
+y_pred = (proba >= threshold).astype(int)
+
+# %%
+export_prediction_set(test_patient_ids, df, y_pred)
+print_utiltiy_score()
+
+# %% [markdown]
+# VERSIE 2 met sepsislabel
+
+# %%
+from helpers.notebook_helpers import run_model
+
+df = read_dataset()
+df = prep_dataset(df, add_sepsis_future=False)
+df = add_all_features(df=df, include_temporal=True, include_rolling=True)
+
+df = df.ffill()
+df = df.dropna()
+
+train_patients, test_patients = train_test_split_by_patient(df)
+_, _, _, X_test, _, test_patient_ids = get_train_test_data_by_patient(
+    df,
+    train_patients,
+    test_patients,
+    y_target='SepsisLabel',
+    delete_patient_ids=True,
+)
+
+# %%
+from lightgbm import LGBMClassifier
+
+loaded = joblib.load('optuna_storage/saved_models/all_lgbm_13-05-2026.pkl')
+
+model = loaded["model"]
+
+
+# %%
+trained_features = model.feature_name_
+current_features = X_test.columns.tolist()
+
+missing_in_test = set(trained_features) - set(current_features)
+extra_in_test = set(current_features) - set(trained_features)
+
+print("Ontbreekt in X_test:")
+print(missing_in_test)
+
+print("\nExtra in X_test:")
+print(extra_in_test)
+
+# %%
 threshold = loaded.get("threshold", 0.5)
 
 proba = model.predict_proba(X_test)[:, 1]
