@@ -50,7 +50,7 @@ def __combine_paths(*csv_paths) -> pd.DataFrame:
         run_date = (
             pd.to_datetime(
                 match.group(1),
-                format="%m-%d-%Y"
+                format="%d-%m-%Y"
             )
             if match else pd.NaT
         )
@@ -75,7 +75,7 @@ def __select_best_model(
     ):
 
     original_df = read_dataset()
-    original_df = prep_dataset(original_df)
+    original_df = prep_dataset(original_df, add_sepsis_future=False)
 
     models = models_df.copy()
     MIN_RECALL = 0.3
@@ -113,7 +113,7 @@ def __select_best_model(
         model_path = (
             f"optuna_storage/saved_models/"
             f"{feature_set}_{model_name}_"
-            f"{run_date.strftime('%m-%d-%Y')}.pkl"
+            f"{run_date.strftime('%d-%m-%Y')}.pkl"
         )
 
         loaded = joblib.load(model_path)
@@ -157,4 +157,4 @@ def return_best_model(
 
 
 if __name__ == "__main__":
-    model = return_best_model("optuna_storage/results_10-05-2026.csv", "optuna_storage/results_11-05-2026.csv", use_min_recall=False)
+    model = return_best_model("optuna_storage/results_13-05-2026.csv", use_min_recall=False)

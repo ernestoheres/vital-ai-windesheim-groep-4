@@ -31,7 +31,7 @@ from helpers.notebook_helpers import (
 )
 
 def get_timestamp():
-    return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    return datetime.now().strftime("%d-%m-%Y")
 
 def get_study_name(feature_set_name, model_name, trials):
     return f"{feature_set_name}_{model_name}_{trials}_{time_stamp}"
@@ -309,7 +309,7 @@ def run_all_experiments(
         print("=" * 80)
 
         df = read_dataset()
-        df = prep_dataset(df)
+        df = prep_dataset(df, False)
         df = add_all_features(
             df,
             **feature_kwargs,

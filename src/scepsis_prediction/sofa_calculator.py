@@ -45,18 +45,6 @@ class SofaCalculator:
         else:
             redundant_colls = [*self.redundant_sofa_colls, *self.redundant_qsofa_colls]
             return self.df.drop(columns=redundant_colls)
-
-
-    def hasSepsis(self) -> pd.Series:
-        required_cols = ["qSOFA_partial", "SOFA_modified_total"]
-
-        if all(col in self.df.columns for col in required_cols):
-            return (
-                (self.df["qSOFA_partial"] >= 2) &
-                (self.df["SOFA_modified_total"] >= 2)
-            )
-        else:
-            raise IndexError("Kolom of kolommen bestaan niet")
         
 
     # Worker methods
