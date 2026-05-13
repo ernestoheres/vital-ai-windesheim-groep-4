@@ -34,7 +34,7 @@ def get_timestamp():
     return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 def get_study_name(feature_set_name, model_name, trials):
-    return f"{feature_set_name}_{model_name}_{trials}_{get_timestamp()}"
+    return f"{feature_set_name}_{model_name}_{trials}_{time_stamp}"
 
 def create_model(trial, model_name):
     if model_name == "xgb":
@@ -329,6 +329,7 @@ def run_all_experiments(
             df,
             train_patients,
             test_patients,
+            y_target='SepsisLabel',
             delete_patient_ids=True,
         )
 
@@ -471,7 +472,7 @@ def run_all_experiments(
 
             model_path = (
                 MODELS_DIR /
-                f"{feature_set_name}_{model_name}.pkl"
+                f"{feature_set_name}_{model_name}_{time_stamp}.pkl"
             )
 
             joblib.dump(
@@ -524,6 +525,11 @@ model_names_second_test = [
     "catboost",
 ]
 
+model_names_third_test = [
+    "xgb",
+    "lgbm",
+]
+
 FEATURE_CONFIG_SECOND_RUN = {
     "all": {
         "include_rolling": True,
@@ -535,6 +541,8 @@ FEATURE_CONFIG_SECOND_RUN = {
     }
 }
 
+FEATURE_CONFIG_THIRD_RUN = FEATURE_CONFIG_SECOND_RUN
+
 
 BASE_DIR = Path("./optuna_storage")
 BASE_DIR.mkdir(exist_ok=True)
@@ -545,7 +553,11 @@ MODELS_DIR = BASE_DIR / "saved_models"
 
 MODELS_DIR.mkdir(exist_ok=True)
 
+time_stamp: str
+
 if __name__ == "__main__":
+    time_stamp = get_timestamp()
+
     df = read_dataset()
 
     train_patients, test_patients = train_test_split_by_patient(df)
@@ -553,15 +565,15 @@ if __name__ == "__main__":
     results = run_all_experiments(
         train_patients=train_patients,
         test_patients=test_patients,
-        model_names_run=model_names_second_test,
-        feature_configs_run=FEATURE_CONFIG_SECOND_RUN,
+        model_names_run=model_names_third_test,
+        feature_configs_run=FEATURE_CONFIG_THIRD_RUN,
         n_trials=80,
     )
 
     print(results)
 
     try:
-        filename = f"all_result_{get_timestamp}"
+        filename = f"all_result_{time_stamp}"
         results.to_csv(filename, sep=',', index=False) 
     except Exception as e:
         print(f'Error while saving: {e}')
