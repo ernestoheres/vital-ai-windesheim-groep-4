@@ -567,7 +567,7 @@ if __name__ == "__main__":
         test_patients=test_patients,
         model_names_run=model_names_third_test,
         feature_configs_run=FEATURE_CONFIG_THIRD_RUN,
-        n_trials=80,
+        n_trials=100,
     )
 
     print(results)
