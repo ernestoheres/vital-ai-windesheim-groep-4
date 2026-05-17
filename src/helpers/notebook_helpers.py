@@ -64,44 +64,6 @@ def read_dataset(
     sep             : Seperator die gebruikt worden in de csv
     """
     return pd.read_csv(path, sep=sep)
-    
-def get_gender_percentage(data: pd.DataFrame) -> None: 
-    """
-    Deze functie bererkend de verhouding van genders in de dataset.
- 
-    Parameters
-    ----------
-    data            : Dateset waarin de genders staan
-    """
-    genderLenght = len(data['Gender'])
-    gender_vals = data['Gender'].unique()
-
-    def calc_percentage(val: int) -> float:
-        return (val /genderLenght) * 100
-
-    for val in gender_vals:
-        count = (data['Gender'] == val).sum()
-        print(f'{val}: {calc_percentage(count):.2f}%')
-
-def get_sepsis_values(data: pd.DataFrame) -> None:
-    """
-    Funtie die berekent hoeveel procent van de dataset wel/geen sepis heeft
-    op basis van de sepsisLabels.
- 
-    Parameters
-    ----------
-    data            : Dateset waarin de sepsislabels hebben
-    """
-    if 'SepsisLabel' not in data.columns:
-        raise ValueError("Kolom 'SepsisLabel' ontbreekt in de DataFrame")
-
-    counts = data['SepsisLabel'].value_counts().sort_index()
-    total = len(data)
-
-    print('Sepsis verdeling:')
-    for val, count in counts.items():
-        percentage = (count / total) * 100
-        print(f'{val}: aantal = {count}, percentage = {percentage:.2f}%')
 
 def train_test_split_by_patient(
     original_df: pd.DataFrame, 
