@@ -843,7 +843,6 @@ _, _, _, X_test, _, test_patient_ids = get_train_test_data_by_patient(
     delete_patient_ids=True,
 )
 
-
 # %% [markdown]
 # VERSIE 1 met sepsis_future
 
@@ -888,7 +887,6 @@ from lightgbm import LGBMClassifier
 loaded = joblib.load('optuna_storage/saved_models/all_lgbm_13-05-2026.pkl')
 
 model = loaded["model"]
-
 
 # %%
 trained_features = model.feature_name_
